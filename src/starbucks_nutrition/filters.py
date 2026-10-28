@@ -107,7 +107,11 @@ def filter_caffeinated(df: pd.DataFrame) -> pd.DataFrame:
 # Generic filters
 # --------------------------------------------------------------------------------------
 def _range_mask(
-    df: pd.DataFrame, column: str, min_value: float | None, max_value: float | None
+    df: pd.DataFrame,
+    column: str,
+    min_value: float | None,
+    max_value: float | None,
+    inclusive: bool = True,
 ) -> pd.Series:
     if column not in df.columns:
         raise KeyError(f"Unknown column {column!r}; available: {list(df.columns)}")
@@ -115,9 +119,9 @@ def _range_mask(
     # Rows with NaN never match a range: an item with unknown calories is not "under 500".
     mask = values.notna()
     if min_value is not None:
-        mask &= values.ge(min_value)
+        mask &= values.ge(min_value) if inclusive else values.gt(min_value)
     if max_value is not None:
-        mask &= values.le(max_value)
+        mask &= values.le(max_value) if inclusive else values.lt(max_value)
     return mask
 
 
@@ -126,12 +130,18 @@ def filter_range(
     column: str,
     min_value: float | None = None,
     max_value: float | None = None,
+    inclusive: bool = True,
 ) -> pd.DataFrame:
-    """Rows where ``min_value <= df[column] <= max_value`` (both inclusive, either optional).
+    """Rows with ``df[column]`` between the bounds (either bound optional).
 
-    Example: food under 500 kcal -> ``filter_range(food, "calories", max_value=500)``.
+    ``inclusive=True`` keeps values equal to a bound (``<=``/``>=``); ``inclusive=False``
+    is strict (``<``/``>``). The distinction matters on real data: four food items are
+    exactly 500 kcal, so "under 500" (strict) gives 99 items and "up to 500" gives 103.
+
+    Example: food under 500 kcal ->
+    ``filter_range(food, "calories", max_value=500, inclusive=False)``.
     """
-    return df[_range_mask(df, column, min_value, max_value)]
+    return df[_range_mask(df, column, min_value, max_value, inclusive)]
 
 
 def _search_mask(df: pd.DataFrame, text: str) -> pd.Series:
@@ -156,12 +166,14 @@ class FilterSpec:
     """A combination of criteria, all ANDed. Defaults mean "no restriction".
 
     Designed so a UI can bind widgets directly to fields, e.g.
-    ``FilterSpec(categories=("food",), ranges={"calories": (None, 500)})``.
+    ``FilterSpec(categories=("food",), ranges={"calories": (None, 500)}, inclusive=False)``
+    for "food under 500 kcal". ``inclusive`` applies to every bound in ``ranges``.
     """
 
     categories: tuple[str, ...] = ()
     text: str = ""
     ranges: Mapping[str, tuple[float | None, float | None]] = field(default_factory=dict)
+    inclusive: bool = True
     caffeinated_only: bool = False
     caffeine_statuses: tuple[str, ...] = ()
     with_data_only: bool = False
@@ -183,7 +195,7 @@ def apply_filters(df: pd.DataFrame, spec: FilterSpec) -> pd.DataFrame:
     if spec.text:
         mask &= _search_mask(df, spec.text)
     for column, (low, high) in spec.ranges.items():
-        mask &= _range_mask(df, column, low, high)
+        mask &= _range_mask(df, column, low, high, spec.inclusive)
     if spec.caffeinated_only:
         mask &= df[CAFFEINE_STATUS_COL].eq("likely")
     if spec.caffeine_statuses:

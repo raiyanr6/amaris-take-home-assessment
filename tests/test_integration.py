@@ -8,6 +8,7 @@ import pytest
 
 from starbucks_nutrition import analysis, config
 from starbucks_nutrition.__main__ import main
+from starbucks_nutrition.filters import filter_range
 
 
 def test_drinks_counts(real_menu) -> None:
@@ -90,3 +91,18 @@ def test_cli_reports_bad_file(tmp_path, capsys) -> None:
     bad.write_text("Code,Colour\nA1,red\n", encoding="utf-8")
     assert main(["--drinks", str(bad)]) == 1
     assert "item-name column" in capsys.readouterr().err
+
+
+def test_food_under_500_strict_vs_inclusive(real_menu) -> None:
+    menu, _ = real_menu
+    food = menu[menu["category"] == "food"]
+    assert len(filter_range(food, "calories", max_value=500, inclusive=False)) == 99
+    assert len(filter_range(food, "calories", max_value=500)) == 103
+
+
+def test_real_caveats_flag_understated_drink_mean(real_menu) -> None:
+    menu, _ = real_menu
+    text = "\n".join(analysis.comparison_caveats(menu))
+    assert "Only 74 of 154 drink items (48%)" in text
+    assert "Frappuccino 33" in text
+    assert "drink calorie mean is likely understated" in text

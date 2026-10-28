@@ -194,6 +194,29 @@ CAFFEINE_RULE_TIERS: Final[tuple[tuple[str, str, tuple[str, ...]], ...]] = (
         (r"tea", r"tazo", r"teavana"),
     ),
 )
+# --------------------------------------------------------------------------------------
+# Product families (for explaining missing data)
+# --------------------------------------------------------------------------------------
+# Missing nutrition data is not random: in drinks.csv it is concentrated in Frappuccinos
+# and Doubleshot cans (typically high-calorie), but also includes espresso shots and sodas.
+# analysis.comparison_caveats groups rows without data by family to say WHICH items are
+# missing and to estimate the bias. First matching family wins; patterns match item_key.
+PRODUCT_FAMILIES: Final[tuple[tuple[str, str], ...]] = (
+    ("Frappuccino", r"frappuccino"),
+    ("Doubleshot", r"doubleshot"),
+    ("Refreshers", r"refreshers?|pink drink|violet drink"),
+    ("Tea", r"\btea\b|tazo|teavana|chai"),
+    (
+        "Coffee & espresso",
+        r"coffee|cold brew|espresso|americano|latte|mocha|macchiato|misto|cappuccino"
+        r"|flat white|roast",
+    ),
+)
+PRODUCT_FAMILY_OTHER: Final = "Other"
+# A family's analysed mean is only used to estimate its missing items when it is based on
+# at least this many items (one canned Doubleshot on Ice says little about Doubleshot Energy).
+MIN_FAMILY_SAMPLE: Final = 3
+
 # Status for drinks no tier matches.
 CAFFEINE_DEFAULT_STATUS: Final = "unlikely"
 # Food names are not a usable caffeine signal ("Classic Coffee Cake" has none, chocolate

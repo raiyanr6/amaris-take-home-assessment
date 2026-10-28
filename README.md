@@ -44,9 +44,14 @@ from starbucks_nutrition.filters import FilterSpec, apply_filters
 menu, reports = load_menu()
 
 analysis.describe(menu)  # per-category stats
-analysis.compare_categories(menu)  # drinks vs food, shared metrics only
+analysis.compare_categories(menu)  # drinks vs food, shared metrics + coverage
+analysis.comparison_caveats(menu)  # plain-language caveats for that comparison
+analysis.ratio_summary(menu)  # fat:protein as mean, median and aggregate ratio
 analysis.top_n(menu, "calories", 5, category="drink")
-apply_filters(menu, FilterSpec(categories=("food",), ranges={"calories": (None, 500)}))
+
+# Food strictly under 500 kcal (inclusive=True, the default, would mean <= 500).
+spec = FilterSpec(categories=("food",), ranges={"calories": (None, 500)}, inclusive=False)
+apply_filters(menu, spec)
 
 # What cleaning found and changed, as a JSON-friendly dict.
 reports["drink"].to_dict()
@@ -66,6 +71,9 @@ ruff format --check .
 - Missing values (`-`, `N/A`, blank…) become NaN, never 0.
 - Duplicates are resolved to one row per item per category; every dropped row is listed
   in the quality report with the rule applied and the reason.
+- Only 48% of drinks have nutrition data and the gaps are concentrated in Frappuccinos
+  and Doubleshot drinks, so drink averages are likely understated. Comparisons report
+  coverage next to every mean, plus caveats generated from the data.
 - Suspicious rows (e.g. a milk drink reported as 0 kcal) are kept but marked unreliable
   and excluded from statistics and rankings by default.
 - The datasets contain **no sugar or caffeine data**. These metrics are reported as

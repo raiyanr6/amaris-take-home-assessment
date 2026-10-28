@@ -172,3 +172,26 @@ def test_apply_filters_empty_result_keeps_columns(small_menu: pd.DataFrame) -> N
 
 def test_apply_filters_default_spec_is_identity(small_menu: pd.DataFrame) -> None:
     pd.testing.assert_frame_equal(apply_filters(small_menu, FilterSpec()), small_menu)
+
+
+def test_filter_range_boundary_inclusive_vs_strict() -> None:
+    food = make_csv(
+        ", Calories, Fat (g)", "Sandwich,500,20", "Bagel,300,5", "Panini,510,22", "Pop,90,4"
+    )
+    menu, _ = load_menu(None, food)
+    assert set(filter_range(menu, "calories", max_value=500)["item"]) == {
+        "Sandwich",
+        "Bagel",
+        "Pop",
+    }
+    assert set(filter_range(menu, "calories", max_value=500, inclusive=False)["item"]) == {
+        "Bagel",
+        "Pop",
+    }
+    assert set(filter_range(menu, "calories", min_value=90, inclusive=False)["item"]) == {
+        "Sandwich",
+        "Bagel",
+        "Panini",
+    }
+    strict = FilterSpec(ranges={"calories": (None, 500)}, inclusive=False)
+    assert set(apply_filters(menu, strict)["item"]) == {"Bagel", "Pop"}

@@ -16,7 +16,8 @@ src/starbucks_nutrition/
   config.py     canonical schema, header aliases, missing tokens, tolerances, caffeine rules
   textnorm.py   name/header normalisation and folded search keys
   loader.py     read_csv_robust, clean, validate_schema, load_menu, QualityReport, SchemaError
-  analysis.py   describe, coverage, add_derived_metrics, compare_categories, top_n, availability
+  analysis.py   describe, coverage, add_derived_metrics, compare_categories, comparison_caveats,
+                ratio_summary, product_family, top_n, availability
   filters.py    filter_range, search, caffeine_status proxy, FilterSpec, apply_filters
   __main__.py   CLI report: python -m starbucks_nutrition
 tests/          pytest (no __init__.py); conftest.py has fixture CSV builders
@@ -31,6 +32,8 @@ tests/          pytest (no __init__.py); conftest.py has fixture CSV builders
   must be stated as unavailable.
 - Missing values are NaN, never 0. Unreliable rows (`is_reliable == False`) are excluded
   from stats/rankings by default (`include_unreliable=False`).
+- Any category comparison shown to users or the LLM must carry its coverage columns and
+  `analysis.comparison_caveats()` — drink means cover only 48% of drinks.
 - The loader must accept paths, bytes and file-like objects (Streamlit uploads) and must
   not assume the exact layout of the provided files (use the alias map in config).
 - Rules and thresholds live in `config.py` as data, not as if-chains in code.
@@ -63,6 +66,14 @@ location (`config.PROJECT_ROOT`), not the working directory. Text files are LF.
   zeros (line 11) vs 5 kcal / 5 mg sodium (line 102) -> keep the 5 kcal row.
 - Final: drinks 177 -> 154 rows (74 with data, 80 without); food 113 rows, all with data.
 - Names: trailing/double spaces (food), ™/®/accents, one quoted name with a comma.
+- Missing drink data is NOT random: of 80 drinks without data, 33 are Frappuccinos
+  (blended + bottled), 22 coffee/espresso, 11 Doubleshot. Frappuccinos with data average
+  220 kcal vs 141 for all analysed drinks, so the drink calorie mean is likely understated
+  (family-based estimate ~162 kcal). `comparison_caveats()` derives this from the data.
+- Four food items are exactly 500 kcal: "under 500" (strict, `inclusive=False`) = 99,
+  "up to 500" = 103.
+- Fat-to-protein: report mean of item ratios, median, AND aggregate (sum fat / sum
+  protein) via `analysis.ratio_summary()`; 30 analysed drinks have 0 g protein.
 - `Nariño 70 Cold Brew with Milk` is all zeros -> kept, flagged, `is_reliable=False`.
 - No sugar or caffeine columns in either file. Caffeine uses a tri-state name-based proxy
   (`likely`/`unlikely`/`unknown`); Refreshers count as `likely` (green-coffee extract);

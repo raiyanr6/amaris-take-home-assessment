@@ -8,7 +8,9 @@ import numpy as np
 import pandas as pd
 import pytest
 
+from conftest import DRINK_HEADER, make_csv
 from starbucks_nutrition import analysis
+from starbucks_nutrition.loader import load_menu
 
 
 def test_derived_ratio_is_nan_when_protein_is_zero(small_menu: pd.DataFrame) -> None:
@@ -110,3 +112,75 @@ def test_availability_reports_missing_metrics(small_menu: pd.DataFrame) -> None:
         assert not avail.loc[(category, "caffeine_mg"), "available"]
     assert "proxy" in avail.loc[("drink", "caffeine_mg"), "note"]
     assert avail.loc[("drink", "calories"), "n_values"] == 5
+
+
+def test_compare_includes_coverage_columns(small_menu: pd.DataFrame) -> None:
+    row = analysis.compare_categories(small_menu).loc["calories"]
+    # 6 drinks: 5 have calories (incl. the unreliable all-zero row), 4 are analysed.
+    assert (row["n_total_drink"], row["n_with_data_drink"], row["n_analysed_drink"]) == (6, 5, 4)
+    assert row["coverage_pct_drink"] == pytest.approx(5 / 6 * 100)
+    assert (row["n_total_food"], row["n_with_data_food"], row["coverage_pct_food"]) == (3, 3, 100)
+
+
+def test_ratio_summary_mean_median_and_aggregate(small_menu: pd.DataFrame) -> None:
+    summary = analysis.ratio_summary(small_menu)
+    drink = summary.loc["drink"]
+    # Analysed drinks (fat, protein): Latte (7, 13), Ombré (2.5, 1), Refreshers (0, 0),
+    # Espresso (0, 1). Refreshers has 0 g protein: skipped for item ratios but its fat
+    # still counts in the aggregate.
+    assert drink["n_items_with_ratio"] == 3
+    assert drink["mean_of_item_ratios"] == pytest.approx((7 / 13 + 2.5 + 0) / 3)
+    assert drink["median_of_item_ratios"] == pytest.approx(7 / 13)
+    assert drink["n_items_aggregate"] == 4
+    assert drink["aggregate_ratio"] == pytest.approx(9.5 / 15)
+    assert summary.loc["food", "aggregate_ratio"] == pytest.approx((15 + 8 + 29) / (5 + 12 + 23))
+
+
+def test_ratio_summary_all_zero_denominator_is_nan() -> None:
+    df = pd.DataFrame(
+        {
+            "category": ["drink", "drink"],
+            "fat_g": [1.0, 2.0],
+            "protein_g": [0.0, 0.0],
+            "has_nutrition": [True, True],
+            "is_reliable": [True, True],
+        }
+    )
+    row = analysis.ratio_summary(df).loc["drink"]
+    assert math.isnan(row["aggregate_ratio"]) and math.isnan(row["mean_of_item_ratios"])
+
+
+def test_product_family_first_match_wins() -> None:
+    keys = pd.Series(["starbucks bottled mocha frappuccino coffee drink", "espresso", "ginger ale"])
+    assert analysis.product_family(keys).tolist() == ["Frappuccino", "Coffee & espresso", "Other"]
+
+
+def test_caveats_on_small_menu(small_menu: pd.DataFrame) -> None:
+    caveats = analysis.comparison_caveats(small_menu)
+    text = "\n".join(caveats)
+    assert "Only 5 of 6 drink items (83%) have nutrition data" in text
+    assert "Refreshers 1" in text  # Pink Drink has no data
+    assert "excluded as unreliable: Mystery Cold Brew with Milk" in text
+    assert "only drink has data: sodium_mg" in text
+    assert "either dataset: sugar_g, caffeine_mg" in text
+    assert not any("food items" in c and "have nutrition data" in c for c in caveats)
+
+
+def test_caveats_estimate_bias_from_family_means() -> None:
+    drinks = make_csv(
+        DRINK_HEADER,
+        "Mocha Frappuccino,300,10,50,0,5,200",
+        "Caramel Frappuccino,300,10,50,0,5,200",
+        "Java Chip Frappuccino,300,10,50,0,5,200",
+        "Espresso,10,0,2,0,1,0",
+        "Americano,10,0,2,0,1,0",
+        "Pike Place Roast,10,0,2,0,1,0",
+        "Vanilla Frappuccino,-,-,-,-,-,-",
+        "Coffee Frappuccino,-,-,-,-,-,-",
+    )
+    menu, _ = load_menu(drinks, None)
+    (bias,) = [c for c in analysis.comparison_caveats(menu) if "not random" in c]
+    # Observed mean 155; with the 2 missing Frappuccinos at 300: (930 + 600) / 8 = 191.25.
+    assert "likely understated" in bias
+    assert "~191 kcal instead of 155 kcal" in bias
+    assert "Frappuccino items that do have data average 300 kcal" in bias

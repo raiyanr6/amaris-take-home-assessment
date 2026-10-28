@@ -15,7 +15,12 @@ from pathlib import Path
 import pandas as pd
 
 from starbucks_nutrition import analysis, config
-from starbucks_nutrition.filters import FilterSpec, apply_filters, filter_caffeinated
+from starbucks_nutrition.filters import (
+    FilterSpec,
+    apply_filters,
+    filter_caffeinated,
+    filter_range,
+)
 from starbucks_nutrition.loader import DataLoadError, QualityReport, load_menu
 
 
@@ -65,7 +70,7 @@ def main(argv: list[str] | None = None) -> int:
     # Windows consoles default to a legacy code page that cannot print ™/®/é.
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(encoding="utf-8", errors="replace")
-    pd.set_option("display.width", 120)
+    pd.set_option("display.width", 220)
     pd.set_option("display.max_columns", 20)
     pd.set_option("display.float_format", "{:,.2f}".format)
 
@@ -96,6 +101,18 @@ def main(argv: list[str] | None = None) -> int:
 
     _section("5. Drinks vs food (shared metrics only; pct_diff relative to drinks)")
     print(analysis.compare_categories(menu).to_string())
+    print(
+        "(n_total = all items; n_with_data / coverage_pct = items with a value; "
+        "mean is over n_analysed = with data, unreliable rows excluded.)"
+    )
+    print("\nFat-to-protein ratio, three views (g fat per g protein):")
+    print("  mean_of_item_ratios   = average of each item's ratio (protein 0 g items skipped)")
+    print("  median_of_item_ratios = typical item's ratio")
+    print("  aggregate_ratio       = total fat / total protein over items with both values")
+    print(analysis.ratio_summary(menu).to_string())
+    print("\nCaveats:")
+    for caveat in analysis.comparison_caveats(menu):
+        print(f"  - {caveat}")
 
     _section("6. Rankings (unreliable rows excluded)")
     print("Highest-calorie drinks:")
@@ -107,12 +124,12 @@ def main(argv: list[str] | None = None) -> int:
 
     _section("7. Example filters")
     cols = ["item", "calories", "protein_g"]
-    light_food = apply_filters(
-        menu, FilterSpec(categories=("food",), ranges={"calories": (None, 500)})
-    )
+    food = menu[menu["category"] == "food"]
+    light_food = filter_range(food, "calories", max_value=500, inclusive=False)
+    up_to = filter_range(food, "calories", max_value=500)
     print(
-        f"Food items with <= 500 kcal: {len(light_food)} of "
-        f"{int((menu['category'] == 'food').sum())}"
+        f"Food items under 500 kcal (< 500): {len(light_food)} of {len(food)} "
+        f"({len(up_to)} with <= 500; {len(up_to) - len(light_food)} are exactly 500 kcal)"
     )
     print(light_food.nsmallest(5, "calories")[cols].to_string(index=False))
 
