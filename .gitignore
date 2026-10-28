@@ -14,3 +14,7 @@ venv/
 # Secrets — never commit API keys
 .env
 .streamlit/secrets.toml
+# Packaging artefacts (pip install -e .)
+*.egg-info/
+build/
+dist/
