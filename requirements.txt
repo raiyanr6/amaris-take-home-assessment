@@ -1,0 +1,5 @@
+pandas>=2.1
+pytest>=8
+ruff>=0.5
+# Installs this project's src/ package so `python -m starbucks_nutrition` works from anywhere.
+-e .

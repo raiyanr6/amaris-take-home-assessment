@@ -1,0 +1,50 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "starbucks-nutrition"
+version = "0.1.0"
+description = "LLM-powered nutrition analysis tool for the Starbucks menu (take-home test)."
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = ["pandas>=2.1"]
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "ruff>=0.5"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
+addopts = "-ra"
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # pyflakes
+    "I",   # import sorting
+    "B",   # bugbear
+    "UP",  # pyupgrade
+    "SIM", # simplifications
+    "PD",  # pandas-vet
+    "RUF", # ruff-specific
+]
+ignore = [
+    "PD010",  # .pivot/.unstack are clearer than pivot_table for reshaping tidy output
+    "PD013",  # .stack(future_stack=True) is the right tool for MultiIndex agg columns
+    "RUF001", # ™/®/é in strings are real menu data, not confusables
+    "RUF002",
+    "RUF003",
+]
+
+[tool.ruff.lint.per-file-ignores]
+"src/starbucks_nutrition/__main__.py" = ["T201"]  # the CLI is allowed to print
