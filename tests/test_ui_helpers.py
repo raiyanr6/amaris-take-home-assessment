@@ -7,7 +7,12 @@ import pytest
 
 from conftest import DRINK_HEADER, make_csv
 from starbucks_nutrition import analysis
-from starbucks_nutrition.filters import FilterSpec, active_ranges, apply_filters
+from starbucks_nutrition.filters import (
+    FilterSpec,
+    active_ranges,
+    apply_filters,
+    range_filter_notes,
+)
 from starbucks_nutrition.loader import SchemaError, load_menu
 
 
@@ -114,3 +119,27 @@ def test_load_error_names_the_file() -> None:
     bad = make_csv("Code,Colour", "A1,red")
     with pytest.raises(SchemaError, match=r"^Food file: Could not find the item-name column"):
         load_menu(make_csv(DRINK_HEADER, "Latte,190,7,19,0,13,170"), bad)
+
+
+def test_range_filter_notes_name_hidden_rows(real_menu) -> None:
+    menu, _ = real_menu
+    notes = range_filter_notes(menu, {"sodium_mg": (None, 100.0)})
+    assert notes == [
+        "Items without Sodium data (80 drink, all 113 food) are hidden while the Sodium "
+        "filter is active."
+    ]
+    food = menu[menu["category"] == "food"]
+    assert range_filter_notes(food, {"calories": (None, 500.0)}) == []  # nothing missing
+
+
+def test_availability_matrix(small_menu) -> None:
+    matrix = analysis.availability_matrix(small_menu)
+    assert list(matrix.columns) == ["unit", "drink", "food"]
+    assert (matrix.loc["sodium_mg", "drink"], matrix.loc["sodium_mg", "food"]) == (5, 0)
+    assert matrix.loc["sugar_g"].drop("unit").eq(0).all()
+
+
+def test_available_metrics_per_category(small_menu) -> None:
+    assert "sodium_mg" in analysis.available_metrics(small_menu, "drink")
+    food = analysis.available_metrics(small_menu, "food")
+    assert "sodium_mg" not in food and "fat_to_protein" in food

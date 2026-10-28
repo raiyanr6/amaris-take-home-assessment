@@ -67,6 +67,19 @@ def _available_metrics(df: pd.DataFrame) -> list[str]:
     return [m for m in METRIC_UNITS if m in df.columns and df[m].notna().any()]
 
 
+def available_metrics(
+    df: pd.DataFrame, category: str | None = None, include_unreliable: bool = False
+) -> list[str]:
+    """Nutrients and derived metrics with at least one analysable value (canonical order).
+
+    Lets a UI offer only metrics that can actually be ranked, e.g. no sodium for food.
+    """
+    data = analysable(df, include_unreliable)
+    if category is not None:
+        data = data[data[CATEGORY_COL] == category]
+    return _available_metrics(_with_derived(data))
+
+
 def coverage(df: pd.DataFrame) -> pd.DataFrame:
     """Per category: total rows, rows with data, rows excluded as unreliable, rows analysed.
 
@@ -206,7 +219,9 @@ def product_family(item_keys: pd.Series) -> pd.Series:
     )
 
 
-def _missing_data_caveats(df: pd.DataFrame, category: str, include_unreliable: bool) -> list[str]:
+def missing_data_caveats(
+    df: pd.DataFrame, category: str = "drink", include_unreliable: bool = False
+) -> list[str]:
     """Explain how incomplete coverage in one category may bias its calorie mean."""
     group = df[df[CATEGORY_COL] == category]
     missing = group[~group["has_nutrition"]]
@@ -274,7 +289,7 @@ def comparison_caveats(
     """
     caveats: list[str] = []
     for cat in (a, b):
-        caveats += _missing_data_caveats(df, cat, include_unreliable)
+        caveats += missing_data_caveats(df, cat, include_unreliable)
         unreliable = df[(df[CATEGORY_COL] == cat) & df["has_nutrition"] & ~df["is_reliable"]]
         if not include_unreliable and not unreliable.empty:
             caveats.append(
@@ -355,14 +370,7 @@ def availability(df: pd.DataFrame) -> pd.DataFrame:
 # Helpers for the UI and charts (pure; the UI must not compute numbers itself)
 # --------------------------------------------------------------------------------------
 METRIC_LABELS: dict[str, str] = {
-    "calories": "Calories",
-    "fat_g": "Fat",
-    "carb_g": "Carbs",
-    "fiber_g": "Fiber",
-    "protein_g": "Protein",
-    "sodium_mg": "Sodium",
-    "sugar_g": "Sugar",
-    "caffeine_mg": "Caffeine",
+    **config.NUTRIENT_LABELS,
     "fat_to_protein": "Fat-to-protein",
     "protein_per_100kcal": "Protein density",
     "fiber_per_100kcal": "Fiber density",
@@ -374,6 +382,16 @@ def metric_label(metric: str, with_unit: bool = True) -> str:
     label = METRIC_LABELS.get(metric, metric)
     unit = METRIC_UNITS.get(metric)
     return f"{label} ({unit})" if with_unit and unit else label
+
+
+def availability_matrix(df: pd.DataFrame) -> pd.DataFrame:
+    """availability() as a metric x category table of value counts (0 = not in the data)."""
+    avail = availability(df)
+    matrix = avail.pivot(index="metric", columns=CATEGORY_COL, values="n_values")
+    matrix = matrix.reindex(list(NUTRIENT_COLUMNS))
+    matrix.insert(0, "unit", [NUTRIENT_UNITS[m] for m in matrix.index])
+    matrix.columns.name = None
+    return matrix
 
 
 def kpis(df: pd.DataFrame, include_unreliable: bool = False) -> pd.DataFrame:

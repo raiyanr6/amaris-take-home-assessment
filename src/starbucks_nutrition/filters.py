@@ -185,6 +185,38 @@ def active_ranges(
     return ranges
 
 
+def range_filter_notes(
+    df: pd.DataFrame, ranges: Mapping[str, tuple[float | None, float | None]]
+) -> list[str]:
+    """Explain which rows an active range hides only because they have NO value.
+
+    A range excludes NaN rows (unknown is not "under 500"), which can silently remove
+    whole categories, e.g. all food once a sodium range is set. One sentence per range
+    that hides such rows, e.g. "Items without Sodium data (all 113 food) are hidden
+    while the Sodium filter is active."
+    """
+    notes: list[str] = []
+    for column in ranges:
+        if column not in df.columns:
+            continue
+        missing = df[column].isna()
+        if not missing.any():
+            continue
+        n_missing = missing.groupby(df[CATEGORY_COL]).sum()
+        n_total = df[CATEGORY_COL].value_counts()
+        parts = [
+            f"all {n} {cat}" if n == n_total[cat] else f"{n} {cat}"
+            for cat, n in n_missing.items()
+            if n
+        ]
+        label = config.NUTRIENT_LABELS.get(column, column)
+        notes.append(
+            f"Items without {label} data ({', '.join(parts)}) are hidden while the "
+            f"{label} filter is active."
+        )
+    return notes
+
+
 @dataclass
 class FilterSpec:
     """A combination of criteria, all ANDed. Defaults mean "no restriction".

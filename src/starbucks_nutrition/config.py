@@ -42,6 +42,17 @@ NUTRIENT_UNITS: Final[dict[str, str]] = {
     "caffeine_mg": "mg",
 }
 NUTRIENT_COLUMNS: Final[tuple[str, ...]] = tuple(NUTRIENT_UNITS)
+# Human labels for charts, tables and UI messages (units are added from the dicts above).
+NUTRIENT_LABELS: Final[dict[str, str]] = {
+    "calories": "Calories",
+    "fat_g": "Fat",
+    "carb_g": "Carbs",
+    "fiber_g": "Fiber",
+    "protein_g": "Protein",
+    "sodium_mg": "Sodium",
+    "sugar_g": "Sugar",
+    "caffeine_mg": "Caffeine",
+}
 
 # Derived per-item metrics computed in analysis.add_derived_metrics.
 DERIVED_UNITS: Final[dict[str, str]] = {
