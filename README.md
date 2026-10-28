@@ -40,12 +40,16 @@ from starbucks_nutrition import load_menu
 from starbucks_nutrition import analysis
 from starbucks_nutrition.filters import FilterSpec, apply_filters
 
-menu, reports = load_menu()                       # paths, bytes or file objects
-analysis.describe(menu)                           # per-category stats
-analysis.compare_categories(menu)                 # drinks vs food, shared metrics only
+# Sources may be paths, bytes or file objects (e.g. Streamlit uploads).
+menu, reports = load_menu()
+
+analysis.describe(menu)  # per-category stats
+analysis.compare_categories(menu)  # drinks vs food, shared metrics only
 analysis.top_n(menu, "calories", 5, category="drink")
 apply_filters(menu, FilterSpec(categories=("food",), ranges={"calories": (None, 500)}))
-reports["drink"].to_dict()                        # what cleaning found and changed
+
+# What cleaning found and changed, as a JSON-friendly dict.
+reports["drink"].to_dict()
 ```
 
 ## Tests and lint
