@@ -1,0 +1,5 @@
+# Store text files with LF so Windows, CI and Streamlit Cloud see the same thing
+* text=auto eol=lf
+
+# Raw data must stay byte-for-byte as provided — no line-ending conversion
+data/raw/** -text

@@ -1,0 +1,16 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Tooling caches
+.pytest_cache/
+.ruff_cache/
+
+# IDE
+.idea/
+
+# Secrets — never commit API keys
+.env
+.streamlit/secrets.toml
