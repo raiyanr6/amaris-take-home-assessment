@@ -488,7 +488,11 @@ def load_menu(
     for category, src in sources.items():
         if src is None:
             continue
-        cleaned, report = clean(read_csv_robust(src), category)
+        try:
+            cleaned, report = clean(read_csv_robust(src), category)
+        except DataLoadError as exc:
+            # Say WHICH file failed: with two uploads the user needs to know which to fix.
+            raise type(exc)(f"{category.capitalize()} file: {exc}") from exc
         frames.append(cleaned)
         reports[category] = report
 

@@ -112,14 +112,16 @@ def _range_mask(
     min_value: float | None,
     max_value: float | None,
     inclusive: bool = True,
+    lower_inclusive: bool | None = None,
 ) -> pd.Series:
     if column not in df.columns:
         raise KeyError(f"Unknown column {column!r}; available: {list(df.columns)}")
     values = df[column]
     # Rows with NaN never match a range: an item with unknown calories is not "under 500".
     mask = values.notna()
+    lower_incl = inclusive if lower_inclusive is None else lower_inclusive
     if min_value is not None:
-        mask &= values.ge(min_value) if inclusive else values.gt(min_value)
+        mask &= values.ge(min_value) if lower_incl else values.gt(min_value)
     if max_value is not None:
         mask &= values.le(max_value) if inclusive else values.lt(max_value)
     return mask
@@ -161,19 +163,47 @@ def search(df: pd.DataFrame, text: str) -> pd.DataFrame:
     return df[_search_mask(df, text)]
 
 
+def active_ranges(
+    selected: Mapping[str, tuple[float, float]],
+    limits: Mapping[str, tuple[float, float]],
+) -> dict[str, tuple[float | None, float | None]]:
+    """Turn slider positions into FilterSpec.ranges, keeping only bounds the user moved.
+
+    A slider left at its full range must not filter anything. Passing its end points
+    as bounds would (a) drop the min/max item under strict comparison and (b) drop every
+    row with NaN in that column, e.g. all food when the sodium slider is untouched,
+    because food has no sodium data. So a bound at (or beyond) its limit becomes None,
+    and a column with both bounds untouched is left out entirely.
+    """
+    ranges: dict[str, tuple[float | None, float | None]] = {}
+    for column, (low, high) in selected.items():
+        lo_limit, hi_limit = limits.get(column, (low, high))
+        lower = low if low > lo_limit else None
+        upper = high if high < hi_limit else None
+        if lower is not None or upper is not None:
+            ranges[column] = (lower, upper)
+    return ranges
+
+
 @dataclass
 class FilterSpec:
     """A combination of criteria, all ANDed. Defaults mean "no restriction".
 
     Designed so a UI can bind widgets directly to fields, e.g.
     ``FilterSpec(categories=("food",), ranges={"calories": (None, 500)}, inclusive=False)``
-    for "food under 500 kcal". ``inclusive`` applies to every bound in ``ranges``.
+    for "food under 500 kcal". ``inclusive`` applies to every bound in ``ranges`` unless
+    ``lower_inclusive`` is set, which then governs the lower bounds only. The UI uses
+    ``lower_inclusive=True`` so its "under / up to" toggle changes the upper bound alone.
+
+    A column listed in ``ranges`` excludes rows with NaN in that column, so only put a
+    column there once the user has actually narrowed it (see active_ranges).
     """
 
     categories: tuple[str, ...] = ()
     text: str = ""
     ranges: Mapping[str, tuple[float | None, float | None]] = field(default_factory=dict)
     inclusive: bool = True
+    lower_inclusive: bool | None = None
     caffeinated_only: bool = False
     caffeine_statuses: tuple[str, ...] = ()
     with_data_only: bool = False
@@ -195,7 +225,7 @@ def apply_filters(df: pd.DataFrame, spec: FilterSpec) -> pd.DataFrame:
     if spec.text:
         mask &= _search_mask(df, spec.text)
     for column, (low, high) in spec.ranges.items():
-        mask &= _range_mask(df, column, low, high, spec.inclusive)
+        mask &= _range_mask(df, column, low, high, spec.inclusive, spec.lower_inclusive)
     if spec.caffeinated_only:
         mask &= df[CAFFEINE_STATUS_COL].eq("likely")
     if spec.caffeine_statuses:

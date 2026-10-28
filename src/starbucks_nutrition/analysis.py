@@ -18,6 +18,7 @@ import pandas as pd
 
 from starbucks_nutrition import config
 from starbucks_nutrition.config import (
+    ATWATER_KCAL_PER_G,
     CATEGORY_COL,
     DERIVED_UNITS,
     ITEM_COL,
@@ -25,6 +26,7 @@ from starbucks_nutrition.config import (
     NUTRIENT_COLUMNS,
     NUTRIENT_UNITS,
 )
+from starbucks_nutrition.filters import CAFFEINE_STATUS_COL, add_caffeine_status
 
 METRIC_UNITS: dict[str, str] = {**NUTRIENT_UNITS, **DERIVED_UNITS}
 _STATS = ["count", "mean", "median", "min", "max", "std", "sum"]
@@ -45,8 +47,11 @@ def add_derived_metrics(df: pd.DataFrame) -> pd.DataFrame:
     )
 
 
-def _analysable(df: pd.DataFrame, include_unreliable: bool) -> pd.DataFrame:
-    """Rows that statistics should use."""
+def analysable(df: pd.DataFrame, include_unreliable: bool = False) -> pd.DataFrame:
+    """Rows that statistics and charts should use: with data, reliable unless asked.
+
+    Public so charts apply exactly the same row rules as the statistics they sit next to.
+    """
     mask = df["has_nutrition"]
     if not include_unreliable:
         mask &= df["is_reliable"]
@@ -88,7 +93,7 @@ def describe(df: pd.DataFrame, include_unreliable: bool = False) -> pd.DataFrame
     is only meaningful for additive nutrients (e.g. total calories), so it is NaN for
     ratios. Metrics a category doesn't have (food sodium) are omitted for that category.
     """
-    data = _with_derived(_analysable(df, include_unreliable))
+    data = _with_derived(analysable(df, include_unreliable))
     metrics = _available_metrics(data)
     if data.empty or not metrics:
         return pd.DataFrame(
@@ -110,7 +115,7 @@ def describe(df: pd.DataFrame, include_unreliable: bool = False) -> pd.DataFrame
 
 
 def _shared_metrics(df: pd.DataFrame, a: str, b: str, include_unreliable: bool) -> list[str]:
-    data = _with_derived(_analysable(df, include_unreliable))
+    data = _with_derived(analysable(df, include_unreliable))
     left_metrics = _available_metrics(data[data[CATEGORY_COL] == a])
     right_metrics = set(_available_metrics(data[data[CATEGORY_COL] == b]))
     return [m for m in left_metrics if m in right_metrics]
@@ -137,7 +142,7 @@ def compare_categories(
     """
     shared = _shared_metrics(df, a, b, include_unreliable)
     everything = _with_derived(df)
-    analysed = _with_derived(_analysable(df, include_unreliable))
+    analysed = _with_derived(analysable(df, include_unreliable))
 
     columns: dict[str, object] = {"unit": [METRIC_UNITS[m] for m in shared]}
     for cat in (a, b):
@@ -173,7 +178,7 @@ def ratio_summary(
       "for every gram of protein on the menu, how much fat". Items with 0 g protein still
       contribute their fat, so nothing is silently dropped.
     """
-    data = _analysable(df, include_unreliable)
+    data = analysable(df, include_unreliable)
     both = data[data[numerator].notna() & data[denominator].notna()]
     item_ratio = both[numerator] / both[denominator].where(both[denominator] > 0)
     grouped = both.assign(_ratio=item_ratio).groupby(CATEGORY_COL, sort=True)
@@ -219,7 +224,7 @@ def _missing_data_caveats(df: pd.DataFrame, category: str, include_unreliable: b
 
     # Rough bias estimate: stand in each missing item with the calorie mean of analysed
     # items from the same family (only families with enough analysed items).
-    analysed = _analysable(group, include_unreliable)
+    analysed = analysable(group, include_unreliable)
     analysed = analysed[analysed["calories"].notna()]
     if analysed.empty:
         return caveats
@@ -306,7 +311,7 @@ def top_n(
     rows are excluded by default so e.g. a drink wrongly reported as 0 kcal is not
     presented as the lowest-calorie drink.
     """
-    data = _with_derived(_analysable(df, include_unreliable))
+    data = _with_derived(analysable(df, include_unreliable))
     if metric not in data.columns:
         raise KeyError(f"Unknown metric {metric!r}; choose from {list(METRIC_UNITS)}")
     if category is not None:
@@ -344,3 +349,175 @@ def availability(df: pd.DataFrame) -> pd.DataFrame:
     return pd.DataFrame(
         rows, columns=[CATEGORY_COL, "metric", "unit", "n_values", "available", "note"]
     )
+
+
+# --------------------------------------------------------------------------------------
+# Helpers for the UI and charts (pure; the UI must not compute numbers itself)
+# --------------------------------------------------------------------------------------
+METRIC_LABELS: dict[str, str] = {
+    "calories": "Calories",
+    "fat_g": "Fat",
+    "carb_g": "Carbs",
+    "fiber_g": "Fiber",
+    "protein_g": "Protein",
+    "sodium_mg": "Sodium",
+    "sugar_g": "Sugar",
+    "caffeine_mg": "Caffeine",
+    "fat_to_protein": "Fat-to-protein",
+    "protein_per_100kcal": "Protein density",
+    "fiber_per_100kcal": "Fiber density",
+}
+
+
+def metric_label(metric: str, with_unit: bool = True) -> str:
+    """Human label for a metric, e.g. "Fat (g)": used for axes and table headers."""
+    label = METRIC_LABELS.get(metric, metric)
+    unit = METRIC_UNITS.get(metric)
+    return f"{label} ({unit})" if with_unit and unit else label
+
+
+def kpis(df: pd.DataFrame, include_unreliable: bool = False) -> pd.DataFrame:
+    """Headline numbers per category: items, items with data (and %), mean calories.
+
+    The mean is over analysed rows only (n_calories), so it is shown with its coverage.
+    """
+    cov = coverage(df)
+    data = analysable(df, include_unreliable)
+    grouped = data.groupby(CATEGORY_COL)["calories"]
+    return pd.DataFrame(
+        {
+            "items": cov["rows"],
+            "with_data": cov["with_data"],
+            "coverage_pct": cov["with_data"] / cov["rows"] * 100,
+            "n_calories": grouped.count().reindex(cov.index, fill_value=0).astype(int),
+            "mean_calories": grouped.mean().reindex(cov.index),
+        }
+    )
+
+
+def metric_bounds(df: pd.DataFrame, categories: tuple[str, ...] = ()) -> pd.DataFrame:
+    """Min/max and value count per nutrient over the selected categories (all if empty).
+
+    Drives the UI sliders: a nutrient with n_values == 0 (e.g. sodium when only food is
+    selected) has NaN bounds and its slider should be disabled.
+    """
+    data = df[df[CATEGORY_COL].isin(categories)] if categories else df
+    present = [m for m in NUTRIENT_COLUMNS if m in data.columns]
+    return pd.DataFrame(
+        {
+            "min": data[present].min(),
+            "max": data[present].max(),
+            "n_values": data[present].notna().sum().astype(int),
+            "unit": [NUTRIENT_UNITS[m] for m in present],
+        }
+    ).rename_axis("metric")
+
+
+MACROS: tuple[str, ...] = ("fat_g", "carb_g", "protein_g")
+
+
+def macro_energy_share(df: pd.DataFrame, include_unreliable: bool = False) -> pd.DataFrame:
+    """Share of energy from fat / carbs / protein per category, using Atwater 9/4/4.
+
+    Summed over items that report all three macros, so each category's shares add to
+    100% of *macro-derived* energy. That differs from the label calorie total (rounding,
+    fiber), which is why shares are relative to the Atwater sum, not to calories.
+    Tidy output: category, macro, kcal, pct, n_items.
+    """
+    columns = [CATEGORY_COL, "macro", "kcal", "pct", "n_items"]
+    data = analysable(df, include_unreliable)
+    data = data[data[list(MACROS)].notna().all(axis=1)]
+    if data.empty:
+        return pd.DataFrame(columns=columns)
+    factors = pd.Series({m: ATWATER_KCAL_PER_G[m] for m in MACROS})
+    kcal = data[list(MACROS)].mul(factors).groupby(data[CATEGORY_COL]).sum()
+    totals = kcal.sum(axis=1)
+    pct = kcal.div(totals.where(totals > 0), axis=0) * 100
+    tidy = pd.DataFrame({"kcal": kcal.stack(), "pct": pct.stack()})
+    tidy.index.names = [CATEGORY_COL, "macro"]
+    tidy = tidy.reset_index()
+    tidy["n_items"] = tidy[CATEGORY_COL].map(data.groupby(CATEGORY_COL).size()).astype(int)
+    return tidy[columns]
+
+
+def caffeine_counts(
+    df: pd.DataFrame, category: str = "drink", include_unreliable: bool = False
+) -> pd.DataFrame:
+    """Items per caffeine status (likely / unlikely / unknown) for one category.
+
+    Rows WITHOUT nutrition data are counted: the status comes from the name (or a
+    measured caffeine_mg), not from the nutrients. Only rows flagged unreliable are
+    excluded by default, consistent with every other chart. Columns: caffeine_status,
+    n_items, basis (how the status was decided, e.g. "name_proxy").
+    """
+    data = df if CAFFEINE_STATUS_COL in df.columns else add_caffeine_status(df)
+    data = data[data[CATEGORY_COL] == category]
+    if not include_unreliable:
+        data = data[data["is_reliable"]]
+    counts = (
+        data[CAFFEINE_STATUS_COL]
+        .value_counts()
+        .reindex(list(config.CAFFEINE_STATUSES), fill_value=0)
+        .astype(int)
+    )
+    basis = ", ".join(sorted(data["caffeine_basis"].unique()))
+    return pd.DataFrame(
+        {CAFFEINE_STATUS_COL: counts.index, "n_items": counts.to_numpy(), "basis": basis}
+    )
+
+
+def family_coverage(df: pd.DataFrame, category: str = "drink") -> pd.DataFrame:
+    """Per product family: items with nutrition data vs without (all rows counted).
+
+    Makes the non-random missing data visible: a family with many items and no data
+    (Frappuccino) biases the category mean. Sorted by items without data, descending.
+    """
+    columns = ["family", "with_data", "without_data", "total", "coverage_pct"]
+    group = df[df[CATEGORY_COL] == category]
+    if group.empty:
+        return pd.DataFrame(columns=columns)
+    family = product_family(group[ITEM_KEY_COL])
+    counts = group["has_nutrition"].groupby(family).agg(["sum", "size"])
+    out = pd.DataFrame(
+        {
+            "family": counts.index,
+            "with_data": counts["sum"].astype(int).to_numpy(),
+            "total": counts["size"].astype(int).to_numpy(),
+        }
+    )
+    out["without_data"] = out["total"] - out["with_data"]
+    out["coverage_pct"] = out["with_data"] / out["total"] * 100
+    out = out.sort_values(["without_data", "total"], ascending=False, kind="stable")
+    return out[columns].reset_index(drop=True)
+
+
+DISPLAY_COLUMNS: tuple[str, ...] = (
+    ITEM_COL,
+    CATEGORY_COL,
+    *NUTRIENT_COLUMNS,
+    "caffeine_status",
+    "has_nutrition",
+    "is_reliable",
+    "quality_flag",
+)
+
+
+def display_table(df: pd.DataFrame, drop_empty: bool = True) -> pd.DataFrame:
+    """Columns for showing items to people, with units in the headers ("Fat (g)").
+
+    ``drop_empty`` hides nutrient columns with no values at all (sugar/caffeine in the
+    provided files); availability() and the caveats already report them as missing.
+    """
+    columns = [c for c in DISPLAY_COLUMNS if c in df.columns]
+    if drop_empty:
+        columns = [c for c in columns if c not in NUTRIENT_COLUMNS or df[c].notna().any()]
+    names = {
+        ITEM_COL: "Item",
+        CATEGORY_COL: "Category",
+        "caffeine_status": "Caffeine status (proxy)",
+        "has_nutrition": "Has nutrition data",
+        "is_reliable": "Reliable",
+        "quality_flag": "Quality flag",
+        **{m: metric_label(m) for m in NUTRIENT_COLUMNS},
+    }
+    return df[columns].rename(columns=names).reset_index(drop=True)
