@@ -8,7 +8,7 @@ version = "0.1.0"
 description = "LLM-powered nutrition analysis tool for the Starbucks menu (take-home test)."
 readme = "README.md"
 requires-python = ">=3.11"
-dependencies = ["pandas>=2.1"]
+dependencies = ["pandas>=2.1", "plotly>=6", "streamlit>=1.40"]
 
 [project.optional-dependencies]
 dev = ["pytest>=8", "ruff>=0.5"]
@@ -20,6 +20,7 @@ where = ["src"]
 pythonpath = ["src"]
 testpaths = ["tests"]
 addopts = "-ra"
+markers = ["ui: Streamlit AppTest smoke tests (slower; skip with -m \"not ui\")"]
 
 [tool.ruff]
 line-length = 100
