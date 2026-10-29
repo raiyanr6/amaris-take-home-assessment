@@ -11,7 +11,7 @@ from starbucks_nutrition.ui.explore import NO_MATCH_MESSAGE
 pytestmark = pytest.mark.ui
 
 APP = str(config.PROJECT_ROOT / "streamlit_app.py")
-TABS = ["Overview", "Explore & filter", "Charts", "Data quality"]
+TABS = ["Overview", "AI summary", "Ask the menu", "Explore & filter", "Charts", "Data quality"]
 
 
 @pytest.fixture
@@ -37,7 +37,7 @@ def test_app_runs_with_sample_data(app: AppTest) -> None:
 
 
 def test_each_tab_renders_its_content(app: AppTest) -> None:
-    overview, explore, charts, quality = app.tabs
+    overview, _summary, _ask, explore, charts, quality = app.tabs
     assert len(overview.metric) == 6 and overview.warning  # KPI tiles + caveats box
     assert "likely understated" in overview.warning[0].value
     assert explore.expander and explore.dataframe
