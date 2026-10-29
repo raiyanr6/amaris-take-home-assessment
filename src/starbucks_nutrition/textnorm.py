@@ -34,9 +34,13 @@ def fold_key(values: pd.Series) -> pd.Series:
     "Ombré Pink Drink" -> "ombre pink drink", "Refreshers™" -> "refreshers". Used for
     case/accent-insensitive search and so that names differing only in spacing, case or
     accents are recognised as the same item.
+
+    Names with no ASCII-foldable letters (e.g. "抹茶ラテ") would fold to "", so every such
+    item would share one key and de-duplication would collapse them into a single row.
+    Those keys fall back to the casefolded, whitespace-normalised display name.
     """
     text = clean_display_text(values)
-    return (
+    folded = (
         text.str.translate(_PUNCT_TRANSLATION)
         .str.replace(_SYMBOLS_PATTERN, "", regex=True)
         .str.normalize("NFKD")
@@ -46,6 +50,7 @@ def fold_key(values: pd.Series) -> pd.Series:
         .str.replace(r"\s+", " ", regex=True)
         .str.strip()
     )
+    return folded.where(folded.ne(""), text.str.casefold())
 
 
 def fold_text(text: str) -> str:

@@ -11,6 +11,7 @@ import pandas as pd
 import pytest
 
 from conftest import DRINK_HEADER, FOOD_HEADER, clean_bytes, make_csv
+from starbucks_nutrition.filters import search
 from starbucks_nutrition.loader import (
     OUTPUT_COLUMNS,
     DataLoadError,
@@ -193,6 +194,21 @@ def test_negative_value_becomes_nan_and_is_counted() -> None:
     assert math.isnan(df.loc[0, "fat_g"])
     assert df.loc[0, "calories"] == 10
     assert report.invalid_values == {"fat_g": 1}
+
+
+def test_non_latin_names_are_not_collapsed_into_one_row() -> None:
+    df, report = clean_bytes(
+        make_csv(
+            DRINK_HEADER,
+            "抹茶ラテ,200,5,30,1,6,100",
+            "ほうじ茶ラテ,180,4,28,0,6,90",
+            "カフェモカ,300,10,40,2,8,120",
+        )
+    )
+    assert list(df["item"]) == ["抹茶ラテ", "ほうじ茶ラテ", "カフェモカ"]
+    assert df["item_key"].is_unique
+    assert report.conflicts_resolved == []
+    assert len(search(df, "抹茶")) == 1
 
 
 def test_item_names_are_normalised_and_keyed() -> None:
