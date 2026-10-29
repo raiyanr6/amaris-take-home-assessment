@@ -5,8 +5,8 @@ and food CSVs, cleans them, computes statistics and comparisons with pandas, and
 steps) uses the Groq LLM API to narrate the results and a Streamlit UI to explore them.
 
 > Current status: **data layer** (loading, cleaning, statistics, comparison, filtering),
-> **charts** (plotly) and a **Streamlit web UI** with CSV upload. The Groq LLM summaries
-> come next.
+> **charts** (plotly), a **Streamlit web UI** with CSV upload, and **Groq LLM** features:
+> an AI summary (Part 2) and natural-language questions (bonus).
 
 ## Setup
 
@@ -69,6 +69,75 @@ One row per menu item, as CSV (UTF-8 or UTF-16, up to 5 MB per file):
 
 A file that cannot be used shows an error naming the file and what was expected.
 
+## AI features (Groq)
+
+**Design: pandas computes, the LLM narrates.** The model never sees the CSVs and never
+runs code:
+
+- **AI summary** sends a compact JSON of figures computed by the package (stats,
+  comparison with coverage, rankings, caveats, which metrics are missing) and asks the
+  model to describe them under fixed headings.
+- **Ask the menu** uses **tool calling**: the model picks one of six read-only lookups
+  (`get_stats`, `top_items`, `filter_items`, `get_item`, `compare_drinks_food`,
+  `data_availability`). Arguments are validated against whitelists, results are capped
+  at 25 rows, and the model phrases the answer.
+- **Grounding check:** every figure in the output is checked against the figures the
+  model was given. The app shows "✓ All N figures verified against the data" or lists
+  the figures it could not find.
+- **Missing data is stated, not guessed:** sugar and caffeine (mg) are not in the data,
+  and the answer says so. Carbohydrates are offered as a labelled sugar proxy, and the
+  name-based caffeine status as a caffeine estimate.
+
+### Setup
+
+1. Get a free API key at [console.groq.com/keys](https://console.groq.com/keys).
+2. Local: `copy .env.example .env` (macOS/Linux: `cp .env.example .env`) and set
+   `GROQ_API_KEY=...`. `.env` is git-ignored and the key is never logged.
+3. Streamlit Cloud: add the key under *App settings → Secrets*:
+   ```toml
+   GROQ_API_KEY = "gsk_..."
+   ```
+4. Optional: `GROQ_MODEL` picks another model. The default is `openai/gpt-oss-120b`, a
+   production model on Groq, run with low reasoning effort.
+
+Without a key, the two AI tabs explain how to add one and the rest of the app works as
+before. The app is protected for a shared free-tier key in three ways:
+- rate limits (429) are retried with backoff, honouring `retry-after`;
+- each browser session is capped at 30 AI calls;
+- summaries are cached per (data, focus, model), so clicking Generate again doesn't re-bill.
+
+### The two AI tabs
+
+| Tab | What it does |
+|---|---|
+| AI summary | Pick a focus (overview, highest-carb drinks as a sugar proxy, most calorie-dense food, best protein per calorie, lighter options) and generate. Shows the grounding badge, model / tokens / latency, and an expander with the exact system prompt and facts the model was given. |
+| Ask the menu | Chat with example questions. Each answer has a grounding badge and a "How I got this" expander with every tool call, its arguments and the (truncated) result. Follow-ups such as "and for food?" use the last 3 turns. |
+
+Example questions: *Which drinks have the most carbs?* · *Which food items are under 500
+calories and high in protein?* · *What's the average caffeine content for drinks?* (the
+answer: not in the data) · *Which drinks have the most sugar?* (the answer: not in the
+data; carbohydrates offered as a proxy).
+
+Off-topic requests and prompt injection ("ignore your instructions…") get a short
+refusal. Uploaded item names are treated as data, never instructions: they are
+sanitised and truncated, and both system prompts say so.
+
+### From Python
+
+```python
+from starbucks_nutrition import load_menu
+from starbucks_nutrition.llm.client import GroqClient
+from starbucks_nutrition.llm.context import build_facts
+from starbucks_nutrition.llm.qa import answer_question
+from starbucks_nutrition.llm.summarize import generate_summary
+
+menu, reports = load_menu()
+client = GroqClient()  # reads GROQ_API_KEY / GROQ_MODEL from the environment or .env
+print(generate_summary(client, build_facts(menu, reports), "overview").text)
+result = answer_question(client, "Which drinks have the most carbs?", menu)
+print(result.answer, result.grounding)
+```
+
 ## Use as a library
 
 ```python
@@ -101,8 +170,9 @@ viz.compare_means_chart(menu).show()
 ## Tests and lint
 
 ```bash
-pytest                 # everything, incl. Streamlit AppTest smoke tests
+pytest                 # everything except live API tests, incl. AppTest smoke tests
 pytest -m "not ui"     # skip the slower UI smoke tests
+pytest -m live -s      # real Groq calls; skipped unless GROQ_API_KEY is set
 ruff check .
 ruff format --check .
 ```

@@ -25,7 +25,8 @@ where = ["src"]
 [tool.pytest.ini_options]
 pythonpath = ["src"]
 testpaths = ["tests"]
-addopts = "-ra"
+# Live Groq tests never run by accident (they cost quota); select them with -m live.
+addopts = "-ra -m 'not live'"
 markers = [
     "ui: Streamlit AppTest smoke tests (slower; skip with -m \"not ui\")",
     "live: calls the real Groq API; skipped unless GROQ_API_KEY is set",

@@ -5,7 +5,7 @@ Take-home technical test: an LLM-powered nutrition analysis tool for the Starbuc
 (brief: `docs/INSTRUCTIONS.md`). Built in steps:
 1. **Data layer** (done): loading, cleaning, stats, comparison, filtering + tests.
 2. **Visualisations + Streamlit UI** (done): `viz.py`, `ui/`, `streamlit_app.py`.
-3. Groq LLM summarisation / natural-language Q&A.
+3. **Groq LLM** (done): summary (`llm/summarize.py`) and tool-calling Q&A (`llm/qa.py`).
 4. CI/CD and deployment to Streamlit Cloud.
 
 ## Layout
@@ -25,11 +25,16 @@ src/starbucks_nutrition/
   filters.py    filter_range, search, caffeine_status proxy, FilterSpec, apply_filters,
                 active_ranges, range_filter_notes
   viz.py        plotly charts: DataFrame in -> Figure out (no Streamlit imports)
-  ui/           data_source.py (sidebar, uploads, cache), common.py, one module per tab:
-                overview.py, explore.py, charts.py, data_quality.py
+  llm/          client.py (GroqClient, typed errors, retries, BudgetedClient),
+                context.py (build_facts), grounding.py (verify_numbers), safety.py,
+                prompts.py (versioned), summarize.py, tools.py (ToolExecutor), qa.py
+  ui/           data_source.py (sidebar, uploads, cache), common.py, llm_access.py, one
+                module per tab: overview, ai_summary, ask, explore, charts, data_quality
   __main__.py   CLI report: python -m starbucks_nutrition
-tests/          pytest (no __init__.py); conftest.py has fixture CSV builders;
-                test_app.py = Streamlit AppTest smoke tests (marker `ui`)
+tests/          pytest (no __init__.py); conftest.py has fixture CSV builders; fakes.py has
+                FakeLLMClient / FakeGroqSDK; test_app*.py = AppTest (marker `ui`);
+                test_live_groq.py = real API (marker `live`, deselected by default)
+.env.example    GROQ_API_KEY / GROQ_MODEL template (.env itself is git-ignored)
 ```
 
 ## Rules
@@ -69,6 +74,42 @@ tests/          pytest (no __init__.py); conftest.py has fixture CSV builders;
   up to" changes the upper bound only (`lower_inclusive=True`); an active range hides NaN
   rows, and `range_filter_notes` says so.
 
+## LLM rules
+- **Secrets:** `GROQ_API_KEY` comes from Streamlit secrets, the environment or `.env`.
+  Never print, log, commit or put it in an exception message; `.env` and
+  `.streamlit/secrets.toml` stay git-ignored.
+- **Model:** from `GROQ_MODEL`, else `config.LLM_DEFAULT_MODEL`; never hard-code it at
+  call sites. The default is `openai/gpt-oss-120b`: the project key got 404 for
+  `llama-3.3-70b-versatile`. gpt-oss runs with `reasoning_effort="low"` and
+  `include_reasoning=False`. Use temperature 0.2 and capped max tokens.
+- **Summaries:** the model gets `build_facts()` output only (never raw CSVs). Every value
+  in it comes from package functions, JSON-safe (NaN becomes null), with units, coverage,
+  caveats and availability.
+- **Q&A:** tool calling only (no table in context, no code generation / exec).
+  - Tools are read-only wrappers in `llm/tools.py` with whitelist validation. Bad
+    arguments return `{"error": ...}` and never raise.
+  - Limits: 25 rows per result, at most 4 tool rounds then a forced answer, questions
+    capped at 500 chars.
+  - A failed or malformed tool call is retried once, then the user gets a friendly
+    "please rephrase" answer.
+  - Q&A uses the loaded menu and the UI's `include_unreliable` setting.
+- **Grounding:** `verify_numbers()` checks every figure in the output against the sources:
+  the facts, or ALL tool results plus the tool arguments and the question. Item names are
+  removed first, since they can contain digits. The UI shows the badge.
+- **Untrusted input:** both the user's question and uploaded item names are untrusted.
+  - Both system prompts include `DATA_NOT_INSTRUCTIONS`.
+  - Names pass through `safety.safe_text`: control characters stripped, 100 chars max.
+  - Off-topic requests and injection attempts get a short refusal.
+- **Unavailable data:** sugar, caffeine (mg) and food sodium are reported as unavailable.
+  Carbs are offered as a labelled sugar proxy; caffeine uses the name-based status.
+- **Caffeine counts:** one reliability rule everywhere (`analysis.caffeine_counts`,
+  respects `include_unreliable`); CLI, Charts tab, facts and tools agree (tested).
+- **Prompt changes:** bump `prompts.PROMPT_VERSION`.
+- **Tests:** never call the network. Inject `FakeLLMClient`; the UI picks it up from
+  `st.session_state["llm_client"]`.
+- **Protecting the free key:** 30 AI calls per session (`BudgetedClient`); summaries are
+  cached on (facts, focus, model).
+
 ## Commands
 ```bash
 python -m venv .venv
@@ -77,6 +118,7 @@ pip install -r requirements.txt   # also installs this package in editable mode
 python -m starbucks_nutrition     # CLI report (-v for INFO logs)
 streamlit run streamlit_app.py    # web UI
 pytest                            # tests (-m "not ui" skips the AppTest smoke tests)
+pytest -m live -s                 # real Groq calls (needs GROQ_API_KEY)
 ruff check . && ruff format --check .
 ```
 
