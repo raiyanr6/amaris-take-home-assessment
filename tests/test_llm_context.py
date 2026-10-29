@@ -112,6 +112,28 @@ def test_grounding_ignores_numbers_in_item_names(real_facts) -> None:
     assert set(result.verified) == {"141", "48", "650"}
 
 
+NB_HYPHEN, EN_DASH, NBSP = chr(0x2011), chr(0x2013), chr(0x00A0)
+
+
+def test_grounding_handles_restyled_names() -> None:
+    # gpt-oss writes non-breaking hyphens and no-break spaces, and may drop the (R)
+    # sign; the digits inside the names must still be ignored.
+    tool_result = {
+        "items": [
+            {"item": "8-Grain Roll", "carb_g": 70},
+            {"item": "Bantam Bagels (2 Pack)", "carb_g": 41},
+        ]
+    }
+    answer = (
+        f"- 8{NB_HYPHEN}Grain Roll {EN_DASH} 70{NBSP}g carbs\n- Bantam Bagels (2{NBSP}Pack): 41 g"
+    )
+    result = verify_numbers(answer, tool_result)
+    assert result.ok, result.unverified
+    assert result.verified == ("70", "41")
+    named = {"item": "Starbucks® Doubleshot Protein Dark Chocolate", "protein_g": 20}
+    assert verify_numbers("Starbucks Doubleshot Protein Dark Chocolate: 20 g", named).ok
+
+
 def test_grounding_flags_one_invented_number(real_facts) -> None:
     answer = (
         "Drinks with data average 141 kcal (48% coverage); food averages 357 kcal. "

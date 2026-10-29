@@ -44,10 +44,35 @@ class GroundingResult:
         return not self.unverified
 
 
+# Models restyle names: "8‑Grain Roll" with a non-breaking hyphen (U+2011), curly
+# quotes, no-break spaces, dropped ™/®. Both the answer and the names are normalised the
+# same way before matching, so the digit in "8-Grain" is never read as a claim.
+# Code points, so the invisible characters are readable in the source.
+_DASHES = "".join(map(chr, (0x2010, 0x2011, 0x2012, 0x2013, 0x2014, 0x2015, 0x2212)))
+_SPACES = "".join(map(chr, (0x00A0, 0x2007, 0x2009, 0x202F)))  # no-break / thin spaces
+_TYPOGRAPHY = str.maketrans(
+    {
+        **dict.fromkeys(_DASHES, "-"),
+        **dict.fromkeys(_SPACES, " "),
+        chr(0x2018): "'",
+        chr(0x2019): "'",
+        chr(0x201C): '"',
+        chr(0x201D): '"',
+        **dict.fromkeys("™®©℠", ""),
+    }
+)
+
+
+def _normalise(text: str) -> str:
+    return text.translate(_TYPOGRAPHY)
+
+
 def _strip_names(text: str, names: Iterable[str]) -> str:
+    text = _normalise(text)
     # Longest first, so "Nariño 70 Cold Brew with Milk" goes before "Nariño 70 Cold Brew".
-    for name in sorted({n for n in names if n}, key=len, reverse=True):
-        text = re.sub(re.escape(name), " ", text, flags=re.IGNORECASE)
+    for name in sorted({_normalise(n).strip() for n in names if n}, key=len, reverse=True):
+        if name:
+            text = re.sub(re.escape(name), " ", text, flags=re.IGNORECASE)
     return text
 
 
