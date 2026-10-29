@@ -14,11 +14,13 @@ Requires Python 3.11+.
 python -m venv .venv
 # Windows PowerShell:  .venv\Scripts\Activate.ps1
 # macOS / Linux:       source .venv/bin/activate
-pip install -r requirements.txt
+pip install -r requirements-dev.txt   # app + test/lint tools
+# or, to run the app only:  pip install -r requirements.txt
 ```
 
-`requirements.txt` also installs this project in editable mode (`-e .`), so the package
-can be run from any directory.
+`requirements.txt` holds the runtime dependencies (what Streamlit Cloud installs) and
+also installs this project in editable mode (`-e .`), so the package can be run from any
+directory. `requirements-dev.txt` adds pytest, pytest-cov and ruff.
 
 ## Run the report
 
@@ -170,6 +172,8 @@ viz.compare_means_chart(menu).show()
 ```
 
 ## Tests and lint
+
+Needs the dev tools (`pip install -r requirements-dev.txt`).
 
 ```bash
 pytest                 # everything except live API tests, incl. AppTest smoke tests

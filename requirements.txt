@@ -5,7 +5,5 @@ plotly==7.1.0
 # LLM: official Groq SDK; python-dotenv loads .env for local runs.
 groq==1.7.0
 python-dotenv==1.2.4
-pytest>=8
-ruff>=0.5
 # Installs this project's src/ package so `python -m starbucks_nutrition` works from anywhere.
 -e .

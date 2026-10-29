@@ -1,0 +1,6 @@
+# Development: the runtime dependencies plus test and lint tools.
+# Streamlit Cloud installs requirements.txt only, so these stay out of the deployed app.
+-r requirements.txt
+pytest>=8
+pytest-cov>=5
+ruff>=0.5

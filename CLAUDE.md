@@ -35,6 +35,7 @@ tests/          pytest (no __init__.py); conftest.py has fixture CSV builders; f
                 FakeLLMClient / FakeGroqSDK; test_app*.py = AppTest (marker `ui`);
                 test_live_groq.py = real API (marker `live`, deselected by default)
 .env.example    GROQ_API_KEY / GROQ_MODEL template (.env itself is git-ignored)
+requirements.txt      runtime only (Streamlit Cloud); requirements-dev.txt adds pytest/ruff
 ```
 
 ## Rules
@@ -119,7 +120,7 @@ tests/          pytest (no __init__.py); conftest.py has fixture CSV builders; f
 ```bash
 python -m venv .venv
 .venv/Scripts/activate            # Windows PowerShell: .venv\Scripts\Activate.ps1
-pip install -r requirements.txt   # also installs this package in editable mode
+pip install -r requirements-dev.txt  # runtime (requirements.txt, incl. -e .) + pytest/ruff
 python -m starbucks_nutrition     # CLI report (-v for INFO logs)
 streamlit run streamlit_app.py    # web UI
 pytest                            # tests (-m "not ui" skips the AppTest smoke tests)
