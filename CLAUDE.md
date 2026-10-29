@@ -4,12 +4,14 @@
 Take-home technical test: an LLM-powered nutrition analysis tool for the Starbucks menu
 (brief: `docs/INSTRUCTIONS.md`). Built in steps:
 1. **Data layer** (done): loading, cleaning, stats, comparison, filtering + tests.
-2. Visualisations.
+2. **Visualisations + Streamlit UI** (done): `viz.py`, `ui/`, `streamlit_app.py`.
 3. Groq LLM summarisation / natural-language Q&A.
-4. Streamlit UI with CSV upload (deployed to Streamlit Cloud).
+4. CI/CD and deployment to Streamlit Cloud.
 
 ## Layout
 ```
+streamlit_app.py             Streamlit entry point (sidebar + tabs only)
+.streamlit/config.toml       neutral theme, 5 MB upload limit (secrets.toml stays gitignored)
 data/raw/{drinks,food}.csv   provided data — READ-ONLY
 docs/                        brief
 src/starbucks_nutrition/
@@ -17,10 +19,17 @@ src/starbucks_nutrition/
   textnorm.py   name/header normalisation and folded search keys
   loader.py     read_csv_robust, clean, validate_schema, load_menu, QualityReport, SchemaError
   analysis.py   describe, coverage, add_derived_metrics, compare_categories, comparison_caveats,
-                ratio_summary, product_family, top_n, availability
-  filters.py    filter_range, search, caffeine_status proxy, FilterSpec, apply_filters
+                ratio_summary, product_family, top_n, availability, plus UI helpers
+                (kpis, metric_bounds, macro_energy_share, caffeine_counts,
+                family_coverage, availability_matrix, display_table, metric_label)
+  filters.py    filter_range, search, caffeine_status proxy, FilterSpec, apply_filters,
+                active_ranges, range_filter_notes
+  viz.py        plotly charts: DataFrame in -> Figure out (no Streamlit imports)
+  ui/           data_source.py (sidebar, uploads, cache), common.py, one module per tab:
+                overview.py, explore.py, charts.py, data_quality.py
   __main__.py   CLI report: python -m starbucks_nutrition
-tests/          pytest (no __init__.py); conftest.py has fixture CSV builders
+tests/          pytest (no __init__.py); conftest.py has fixture CSV builders;
+                test_app.py = Streamlit AppTest smoke tests (marker `ui`)
 ```
 
 ## Rules
@@ -40,13 +49,34 @@ tests/          pytest (no __init__.py); conftest.py has fixture CSV builders
 - Use `logging`, not `print` (except `__main__.py`). Vectorised pandas; no row-wise apply.
 - Type hints everywhere; docstrings explain *why*.
 
+## UI rules
+- The UI is a THIN layer: no pandas calculations in `ui/` or `streamlit_app.py`. If the UI
+  needs a number or table the package doesn't expose, add a pure, tested function to
+  `analysis`/`filters` and call it.
+- Charts live in `viz.py` as pure functions (DataFrame in, plotly Figure out). They never
+  import Streamlit and return a "No data for this selection" figure for empty input.
+- One fixed colour per category in every chart (drink `#2a78d6`, food `#eb6834`,
+  colour-blind safe); units in every axis label; titles state the question answered.
+- Unreliable rows are excluded from stats and charts unless the global sidebar toggle
+  "Include unreliable rows" is on. Rows without data never appear in numeric charts but
+  do appear in tables/search; tables always list unreliable rows (Reliable column).
+- Coverage and `comparison_caveats()` / `missing_data_caveats()` sit next to the numbers
+  they qualify. The caffeine proxy is explained wherever `caffeine_status` is shown.
+- Each category is labelled "sample" or "uploaded"; uploading one file falls back to the
+  sample for the other. Load errors show a friendly `st.error` (which file, what was
+  expected), never a stack trace. Loading uses `st.cache_data` keyed on the file bytes.
+- Range sliders: a slider at its full range applies no filter (`active_ranges`); "under /
+  up to" changes the upper bound only (`lower_inclusive=True`); an active range hides NaN
+  rows, and `range_filter_notes` says so.
+
 ## Commands
 ```bash
 python -m venv .venv
 .venv/Scripts/activate            # Windows PowerShell: .venv\Scripts\Activate.ps1
 pip install -r requirements.txt   # also installs this package in editable mode
 python -m starbucks_nutrition     # CLI report (-v for INFO logs)
-pytest                            # tests
+streamlit run streamlit_app.py    # web UI
+pytest                            # tests (-m "not ui" skips the AppTest smoke tests)
 ruff check . && ruff format --check .
 ```
 
