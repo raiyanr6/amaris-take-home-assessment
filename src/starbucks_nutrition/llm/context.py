@@ -184,17 +184,17 @@ def build_facts(
     ``expand_rankings`` lists ranking keys (see RANKINGS) to send with 10 items instead
     of 5, so a summary focus gets more depth without sending everything.
     """
-    cov = analysis.coverage(menu)
-    coverage = {
-        str(cat): {
-            "items": int(row["rows"]),
-            "with_data": int(row["with_data"]),
-            "coverage_pct": json_number(row["with_data"] / row["rows"] * 100, 0),
-            "excluded_unreliable": 0 if include_unreliable else int(row["excluded_unreliable"]),
-            "analysed": int(row["with_data"] if include_unreliable else row["analysed"]),
+    coverage = {}
+    for cat in sorted(menu[CATEGORY_COL].unique()):
+        summary = analysis.coverage_summary(menu, cat, include_unreliable)
+        coverage[str(cat)] = {
+            "items": summary["items"],
+            "with_data": summary["with_data"],
+            "coverage_pct": json_number(summary["coverage_pct"], 0),
+            "excluded_unreliable": summary["excluded_unreliable"],
+            "analysed": summary["analysed"],
+            "summary": analysis.coverage_sentence(menu, cat, include_unreliable),
         }
-        for cat, row in cov.iterrows()
-    }
     return {
         "schema": FACTS_SCHEMA,
         "source": dict(sources or {}),

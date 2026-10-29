@@ -98,6 +98,54 @@ def coverage(df: pd.DataFrame) -> pd.DataFrame:
     ).astype(int)
 
 
+def coverage_summary(
+    df: pd.DataFrame, category: str, include_unreliable: bool = False
+) -> dict[str, float]:
+    """THE definition of "have data", used by every tile, subtitle, caveat and the facts.
+
+    - coverage_pct = items with any nutrition data / all items (unreliable rows count as
+      "with data": they have values, they are just not trusted);
+    - excluded_unreliable / analysed say separately what the means are based on.
+    Keeping one definition stops the UI from showing 91% in one place and 82% in another.
+    """
+    group = df[df[CATEGORY_COL] == category]
+    items = len(group)
+    with_data = int(group["has_nutrition"].sum())
+    flagged = int((group["has_nutrition"] & ~group["is_reliable"]).sum())
+    excluded = 0 if include_unreliable else flagged
+    return {
+        "items": items,
+        "with_data": with_data,
+        "coverage_pct": with_data / items * 100 if items else float("nan"),
+        "flagged_unreliable": flagged,
+        "excluded_unreliable": excluded,
+        "analysed": with_data - excluded,
+    }
+
+
+def coverage_sentence(df: pd.DataFrame, category: str, include_unreliable: bool = False) -> str:
+    """E.g. "10 of 11 drink items (91%) have nutrition data; 1 excluded as unreliable, so
+    means use 9." Coverage and the unreliable exclusion are stated separately."""
+    s = coverage_summary(df, category, include_unreliable)
+    if not s["items"]:
+        return f"There are no {category} items."
+    text = (
+        f"{s['with_data']} of {s['items']} {category} items ({s['coverage_pct']:.0f}%) "
+        "have nutrition data"
+    )
+    if s["excluded_unreliable"]:
+        return (
+            f"{text}; {s['excluded_unreliable']} excluded as unreliable, so means use "
+            f"{s['analysed']}."
+        )
+    if s["flagged_unreliable"]:
+        return (
+            f"{text}; {s['flagged_unreliable']} flagged as unreliable but included, so means "
+            f"use {s['analysed']}."
+        )
+    return f"{text}."
+
+
 def describe(df: pd.DataFrame, include_unreliable: bool = False) -> pd.DataFrame:
     """Per-category summary statistics for every available nutrient and derived metric.
 
@@ -228,12 +276,12 @@ def missing_data_caveats(
     if group.empty or missing.empty:
         return []
 
-    n_total, n_missing = len(group), len(missing)
+    summary = coverage_summary(df, category, include_unreliable)
     missing_family = product_family(missing[ITEM_KEY_COL])
     breakdown = ", ".join(f"{fam} {n}" for fam, n in missing_family.value_counts().items())
     caveats = [
-        f"Only {n_total - n_missing} of {n_total} {category} items "
-        f"({(n_total - n_missing) / n_total:.0%}) have nutrition data, so {category} averages "
+        f"Only {summary['with_data']} of {summary['items']} {category} items "
+        f"({summary['coverage_pct']:.0f}%) have nutrition data, so {category} averages "
         f"describe those items only. Items without data by family: {breakdown}."
     ]
 
@@ -395,22 +443,21 @@ def availability_matrix(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def kpis(df: pd.DataFrame, include_unreliable: bool = False) -> pd.DataFrame:
-    """Headline numbers per category: items, items with data (and %), mean calories.
+    """Headline numbers per category: coverage (see coverage_summary) and mean calories.
 
-    The mean is over analysed rows only (n_calories), so it is shown with its coverage.
+    The mean is over analysed rows with a calorie value (n_calories), so it is shown with
+    its coverage and with how many unreliable rows were excluded.
     """
-    cov = coverage(df)
     data = analysable(df, include_unreliable)
     grouped = data.groupby(CATEGORY_COL)["calories"]
-    return pd.DataFrame(
-        {
-            "items": cov["rows"],
-            "with_data": cov["with_data"],
-            "coverage_pct": cov["with_data"] / cov["rows"] * 100,
-            "n_calories": grouped.count().reindex(cov.index, fill_value=0).astype(int),
-            "mean_calories": grouped.mean().reindex(cov.index),
-        }
+    categories = sorted(df[CATEGORY_COL].unique())
+    table = pd.DataFrame(
+        [coverage_summary(df, cat, include_unreliable) for cat in categories],
+        index=pd.Index(categories, name=CATEGORY_COL),
     )
+    table["n_calories"] = grouped.count().reindex(table.index, fill_value=0).astype(int)
+    table["mean_calories"] = grouped.mean().reindex(table.index)
+    return table
 
 
 def metric_bounds(df: pd.DataFrame, categories: tuple[str, ...] = ()) -> pd.DataFrame:

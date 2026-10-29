@@ -172,13 +172,15 @@ def compare_means_chart(
         unit = "kcal" if metrics == ["calories"] else "g"
         fig.update_yaxes(title_text=f"Mean per item ({unit})", row=1, col=col)
 
-    coverage_a = table[f"coverage_pct_{a}"].min()
-    subtitle = (
-        f"Means over items with data. Only {coverage_a:.0f}% of {a} items have data, "
-        f"so {a} means may be biased (see caveats)."
-        if coverage_a < 100
-        else "Means over items with data."
-    )
+    # Category-level coverage from the shared definition (not the per-metric minimum,
+    # which dropped whenever one nutrient had a blank cell).
+    notes = [
+        analysis.coverage_sentence(df, cat, include_unreliable)
+        for cat in (a, b)
+        if (s := analysis.coverage_summary(df, cat, include_unreliable))["coverage_pct"] < 100
+        or s["flagged_unreliable"]
+    ]
+    subtitle = " ".join(["Means over items with data.", *notes, "See caveats." if notes else ""])
     _base_layout(fig, question, subtitle)
     fig.update_layout(barmode="group")
     return fig

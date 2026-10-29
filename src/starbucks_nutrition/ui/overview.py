@@ -20,11 +20,13 @@ def _kpi_tiles(data: MenuData, include_unreliable: bool) -> None:
         name = CATEGORIES.get(str(category), str(category).capitalize())
         tiles = st.columns(3)
         tiles[0].metric(f"{name}: items", f"{int(row['items']):,}", border=True)
+        # delta_arrow="off": these deltas are context ("91% of items"), not changes.
         tiles[1].metric(
             f"{name}: with nutrition data",
             f"{int(row['with_data']):,}",
-            delta=f"{row['coverage_pct']:.0f}% coverage",
+            delta=f"{row['coverage_pct']:.0f}% of items",
             delta_color="off",
+            delta_arrow="off",
             border=True,
         )
         mean = row["mean_calories"]
@@ -33,10 +35,12 @@ def _kpi_tiles(data: MenuData, include_unreliable: bool) -> None:
             "n/a" if math.isnan(mean) else f"{mean:,.0f} kcal",
             delta=f"based on {int(row['n_calories'])} items",
             delta_color="off",
+            delta_arrow="off",
             border=True,
             help="Mean over items with data; unreliable rows excluded unless included "
             "in the sidebar.",
         )
+        st.caption(analysis.coverage_sentence(data.menu, str(category), include_unreliable))
 
 
 def render(data: MenuData, include_unreliable: bool) -> None:

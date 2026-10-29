@@ -44,7 +44,9 @@ def test_compare_means_two_categories_two_panels(small_menu) -> None:
         viz.CATEGORY_COLORS["drink"]
     }
     assert "Based on 4 of 6 items" in fig.data[0].hovertext[0]  # coverage on hover
-    assert "% of drink items have data" in fig.layout.title.text
+    assert "5 of 6 drink items (83%) have nutrition data; 1 excluded as unreliable" in (
+        fig.layout.title.text
+    )
 
 
 def test_top_n_order_and_unreliable_excluded(small_menu) -> None:

@@ -37,6 +37,8 @@ def test_facts_carry_coverage_caveats_and_availability(real_facts) -> None:
         "coverage_pct": 48,
         "excluded_unreliable": 1,
         "analysed": 73,
+        "summary": "74 of 154 drink items (48%) have nutrition data; 1 excluded as "
+        "unreliable, so means use 73.",
     }
     assert any("likely understated" in c for c in real_facts["caveats"])
     unavailable = real_facts["availability"]["unavailable"]
