@@ -222,7 +222,7 @@ def validate_schema(df: pd.DataFrame, original_columns: list[object] | None = No
 _NUMBER_WITH_UNIT = r"^(<\s*)?([-+]?(?:\d+\.?\d*|\.\d+))\s*(?:kcal|cal|mg|g)?$"
 # Thousands separators: a comma, space, no-break or narrow no-break space between a digit
 # and exactly three digits ("1,200", "1 200").
-_THOUSANDS_SEPARATOR = r"(?<=\d)[,   ](?=\d{3}(?!\d))"
+_THOUSANDS_SEPARATOR = r"(?<=\d)[, \u00a0\u202f](?=\d{3}(?!\d))"
 
 
 def _coerce_numeric(values: pd.Series) -> tuple[pd.Series, pd.Series, pd.Series, pd.Series]:

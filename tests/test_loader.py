@@ -183,7 +183,10 @@ def test_numbers_with_units_are_parsed(raw: str, expected: float) -> None:
     assert df.loc[0, "calories"] == expected
 
 
-@pytest.mark.parametrize(("raw", "expected"), [("1 200", 1200.0), ("12 345", 12345.0)])
+@pytest.mark.parametrize(
+    ("raw", "expected"),
+    [("1 200", 1200.0), ("12 345", 12345.0), ("1\u00a0200", 1200.0), ("1\u202f200", 1200.0)],
+)
 def test_space_thousands_separator(raw: str, expected: float) -> None:
     df, report = clean_bytes(make_csv(DRINK_HEADER, f"Espresso,{raw},0,2,0,1,0"))
     assert df.loc[0, "calories"] == expected
