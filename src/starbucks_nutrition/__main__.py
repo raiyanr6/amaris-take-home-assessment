@@ -136,11 +136,13 @@ def main(argv: list[str] | None = None) -> int:
 
     drinks = menu[menu["category"] == "drink"]
     print("\nDrink caffeine status (NAME-BASED PROXY — the dataset has no caffeine column):")
-    print(drinks["caffeine_status"].value_counts().to_string())
+    # Same helper (and reliability rule) as the Charts tab and the LLM facts.
+    print(analysis.caffeine_counts(menu, "drink").to_string(index=False))
     caffeinated = filter_caffeinated(drinks)
+    light_reliable = FilterSpec(ranges={"calories": (None, 100)}, reliable_only=True)
     print(
-        f"\nLikely-caffeinated drinks with data and <= 100 kcal: "
-        f"{len(apply_filters(caffeinated, FilterSpec(ranges={'calories': (None, 100)})))}"
+        f"\nLikely-caffeinated drinks with data and <= 100 kcal (reliable rows): "
+        f"{len(apply_filters(caffeinated, light_reliable))}"
     )
     unknown = drinks[drinks["caffeine_status"] == "unknown"]["item"].tolist()
     print(f"Caffeine unclear from name ({len(unknown)}): {', '.join(unknown)}")
