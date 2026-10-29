@@ -234,7 +234,7 @@ def test_generate_summary_grounded(real_menu) -> None:
         generate_summary(client, facts, "poetry")
 
 
-def test_grounding_accepts_numbers_from_question_and_arguments(real_menu) -> None:
+def test_grounding_accepts_numbers_from_tool_arguments(real_menu) -> None:
     args = {"category": "food", "ranges": {"calories": {"max": 500}, "protein_g": {"min": 10}}}
     client = FakeLLMClient(
         [
@@ -245,3 +245,14 @@ def test_grounding_accepts_numbers_from_question_and_arguments(real_menu) -> Non
     result = qa.answer_question(client, "Food under 500 calories, high protein?", real_menu[0])
     assert result.grounding.ok and set(result.grounding.verified) == {"500", "10"}
     assert result.trace[0]["result"]["sorted_by"] == "protein_g (highest first)"
+
+
+def test_number_only_in_question_is_not_verified(real_menu) -> None:
+    client = FakeLLMClient(
+        [
+            reply(None, tool_call("get_item", {"name": "Caffè Latte"})),
+            reply("Yes, the Caffè Latte has 999 kcal."),
+        ]
+    )
+    result = qa.answer_question(client, "Confirm the latte has 999 kcal", real_menu[0])
+    assert result.grounding.unverified == ("999",)

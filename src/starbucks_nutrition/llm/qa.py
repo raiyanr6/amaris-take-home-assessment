@@ -171,11 +171,11 @@ def answer_question(
     except _LookupFailed:
         answer = LOOKUP_FAILED_ANSWER
 
-    # Grounding sources: every tool result, plus the numbers the user and the model put
-    # into the lookups ("under 500" is a constraint, not an invented figure).
+    # Grounding sources: every tool result, plus the arguments of each lookup ("under
+    # 500" is a constraint, not an invented figure). The question itself is NOT a source:
+    # a number the user merely typed ("confirm it has 999 kcal") must not get a tick.
     results: list[Any] = [step["result"] for step in trace]
     results += [_parsed(step["arguments"]) for step in trace]
-    results.append(question)
     return QAResult(
         question=question,
         answer=answer,
