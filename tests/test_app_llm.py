@@ -91,3 +91,39 @@ def test_clear_chat() -> None:
     assert at.session_state["chat_history"]
     at.button(key="chat_clear").click().run()
     assert at.session_state["chat_history"] == []
+
+
+def test_follow_up_question_keeps_input_and_history() -> None:
+    client = FakeLLMClient(
+        [
+            reply(None, tool_call("top_items", {"metric": "carb_g", "category": "drink", "n": 1})),
+            reply("Drinks: Cinnamon Dolce Frappuccino® Blended Coffee has the most carbs."),
+            reply(None, tool_call("top_items", {"metric": "carb_g", "category": "food", "n": 1})),
+            reply("Food: see the lookup."),
+        ]
+    )
+    at = _app(client)
+    at.chat_input(key="chat_box").set_value("Which drinks have the most carbs?").run()
+    assert not at.exception
+    assert len(at.session_state["chat_history"]) == 1
+    assert len(at.chat_input) == 1  # input still there after the first answer
+    assert any(e.label == "Example questions" for e in at.expander)  # examples tucked away
+
+    at.chat_input(key="chat_box").set_value("and for food?").run()
+    assert not at.exception
+    history = at.session_state["chat_history"]
+    assert [t.question for t in history] == ["Which drinks have the most carbs?", "and for food?"]
+    assert len(at.chat_input) == 1
+
+    follow_up_messages = client.calls[2]["messages"]  # first model call of question 2
+    assert [m["role"] for m in follow_up_messages[:4]] == ["system", "user", "assistant", "user"]
+    assert follow_up_messages[1]["content"] == "Which drinks have the most carbs?"
+    assert "Cinnamon Dolce" in follow_up_messages[2]["content"]
+    assert follow_up_messages[3]["content"] == "and for food?"
+
+
+def test_example_button_uses_same_path_and_input_stays() -> None:
+    at = _app(FakeLLMClient())
+    at.button(key="example_1").click().run()
+    assert [t.question for t in at.session_state["chat_history"]] == [EXAMPLES[1]]
+    assert len(at.chat_input) == 1
