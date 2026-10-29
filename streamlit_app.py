@@ -7,9 +7,11 @@ from __future__ import annotations
 
 import streamlit as st
 
+from starbucks_nutrition.textnorm import use_utf8_console
 from starbucks_nutrition.ui import charts, data_quality, explore, overview
 from starbucks_nutrition.ui.data_source import sidebar_data_source, sidebar_include_unreliable
 
+use_utf8_console()  # server log lines (stderr) keep ™/®/accents on Windows
 st.set_page_config(page_title="Menu Nutrition Explorer", layout="wide")
 st.title("Starbucks menu nutrition explorer")
 st.caption(

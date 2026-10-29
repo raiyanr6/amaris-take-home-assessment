@@ -5,6 +5,8 @@ Kept separate so `loader` and `filters` can both use it without importing each o
 
 from __future__ import annotations
 
+import sys
+
 import pandas as pd
 
 # Trademark-style symbols are dropped from search keys. They must be removed BEFORE
@@ -49,3 +51,15 @@ def fold_key(values: pd.Series) -> pd.Series:
 def fold_text(text: str) -> str:
     """Scalar version of :func:`fold_key`, for user-typed search strings."""
     return str(fold_key(pd.Series([text])).iloc[0])
+
+
+def use_utf8_console() -> None:
+    """Make stdout/stderr UTF-8 so ™/®/accents print correctly on Windows consoles.
+
+    Windows terminals default to a legacy code page, so "Nariño" in a log line comes out
+    as "Nari�o". Linux streams are already UTF-8; streams without ``reconfigure`` (e.g.
+    pytest's capture objects) are left alone.
+    """
+    for stream in (sys.stdout, sys.stderr):
+        if hasattr(stream, "reconfigure"):
+            stream.reconfigure(encoding="utf-8", errors="replace")

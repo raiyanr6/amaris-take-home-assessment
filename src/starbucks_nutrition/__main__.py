@@ -22,6 +22,7 @@ from starbucks_nutrition.filters import (
     filter_range,
 )
 from starbucks_nutrition.loader import DataLoadError, QualityReport, load_menu
+from starbucks_nutrition.textnorm import use_utf8_console
 
 
 def _section(title: str) -> None:
@@ -63,13 +64,13 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("-v", "--verbose", action="store_true", help="show INFO logs")
     args = parser.parse_args(argv)
 
+    # Windows consoles default to a legacy code page that cannot print ™/®/é ("Nari�o").
+    # Reconfigure both streams BEFORE logging is set up, since log records go to stderr.
+    use_utf8_console()
     logging.basicConfig(
         level=logging.INFO if args.verbose else logging.ERROR,
         format="%(levelname)s %(name)s: %(message)s",
     )
-    # Windows consoles default to a legacy code page that cannot print ™/®/é.
-    if hasattr(sys.stdout, "reconfigure"):
-        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
     pd.set_option("display.width", 220)
     pd.set_option("display.max_columns", 20)
     pd.set_option("display.float_format", "{:,.2f}".format)
