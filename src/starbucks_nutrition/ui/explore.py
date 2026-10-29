@@ -149,7 +149,7 @@ def render(data: MenuData, include_unreliable: bool) -> None:
     )
     st.download_button(
         "Download these rows as CSV",
-        table.to_csv(index=False).encode("utf-8"),
+        analysis.csv_safe(table).to_csv(index=False).encode("utf-8"),
         file_name="menu_filtered.csv",
         mime="text/csv",
         key="download_filtered",

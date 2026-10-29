@@ -193,3 +193,21 @@ def test_coverage_sentence_when_unreliable_included(eleven_drinks) -> None:
     assert analysis.coverage_sentence(eleven_drinks, "food") == (
         "1 of 1 food items (100%) have nutrition data."
     )
+
+
+@pytest.mark.parametrize("prefix", ["=", "+", "-", "@", "\t", "\r"])
+def test_csv_safe_neutralises_formula_cells(prefix: str) -> None:
+    table = pd.DataFrame(
+        {
+            "Item": [f"{prefix}HYPERLINK(1)", "Caffè Latte", None],
+            "Calories (kcal)": [-1.0, 190.0, float("nan")],
+            "Reliable": [True, True, False],
+        }
+    )
+    safe = analysis.csv_safe(table)
+    assert safe["Item"].iloc[0] == f"'{prefix}HYPERLINK(1)"
+    assert safe["Item"].iloc[1] == "Caffè Latte" and safe["Item"].isna().iloc[2]
+    assert safe["Calories (kcal)"].iloc[0] == -1.0  # numbers untouched
+    assert table["Item"].iloc[0] == f"{prefix}HYPERLINK(1)"  # input not mutated
+    csv = safe.to_csv(index=False)
+    assert f"'{prefix}HYPERLINK(1)" in csv

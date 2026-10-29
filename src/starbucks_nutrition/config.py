@@ -120,6 +120,10 @@ MISSING_TOKENS: Final[frozenset[str]] = frozenset({"-", "", "n/a", "na", "--"})
 # 0.5) and counted in QualityReport.approximate_values.
 LESS_THAN_VALUE_FACTOR: Final = 0.5
 
+# CSV export: spreadsheet apps run a cell starting with one of these as a formula, and
+# item names in uploaded files are untrusted, so such text cells get a leading "'".
+CSV_FORMULA_PREFIXES: Final[tuple[str, ...]] = ("=", "+", "-", "@", "\t", "\r")
+
 # --------------------------------------------------------------------------------------
 # Plausibility checks
 # --------------------------------------------------------------------------------------

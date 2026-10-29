@@ -587,3 +587,20 @@ def display_table(df: pd.DataFrame, drop_empty: bool = True) -> pd.DataFrame:
         **{m: metric_label(m) for m in NUTRIENT_COLUMNS},
     }
     return df[columns].rename(columns=names).reset_index(drop=True)
+
+
+def csv_safe(df: pd.DataFrame) -> pd.DataFrame:
+    """Copy of ``df`` safe to open in a spreadsheet (CSV formula injection).
+
+    An uploaded item name such as "=HYPERLINK(...)" would run as a formula in Excel, so
+    text cells starting with config.CSV_FORMULA_PREFIXES get a leading "'". Numeric
+    columns are left alone: a negative number is not a formula.
+    """
+    out = df.copy()
+    for column in out.select_dtypes(include=["object", "string"]).columns:
+        values = out[column]
+        risky = values.map(type).eq(str) & values.astype(str).str.startswith(
+            config.CSV_FORMULA_PREFIXES
+        )
+        out[column] = values.mask(risky, "'" + values.astype(str))
+    return out
