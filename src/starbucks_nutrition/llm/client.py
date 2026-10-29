@@ -11,7 +11,8 @@ import logging
 import os
 import random
 import time
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Iterator, Mapping, Sequence
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 from typing import Any, Protocol
 
@@ -245,7 +246,7 @@ class GroqClient:
 # --------------------------------------------------------------------------------------
 @dataclass
 class CallBudget:
-    limit: int = config.LLM_MAX_CALLS_PER_SESSION
+    limit: int = config.LLM_MAX_REQUESTS_PER_SESSION
     used: int = 0
 
     @property
@@ -255,10 +256,34 @@ class CallBudget:
 
 @dataclass
 class BudgetedClient:
-    """Wraps any LLMClient and refuses calls once the budget is spent."""
+    """Wraps any LLMClient and refuses requests once the budget is spent.
+
+    Each chat() call costs one unit, unless it runs inside ``request()``: a Q&A question
+    may take several tool rounds and retries, but the user asked one thing, so the whole
+    question costs one unit.
+    """
 
     inner: LLMClient
     budget: CallBudget
+    _in_request: bool = field(default=False, init=False, repr=False)
+
+    def _charge(self) -> None:
+        if self.budget.remaining <= 0:
+            raise LLMBudgetExceeded(
+                f"This session has used its {self.budget.limit} AI requests. Reload the "
+                "page later to start a new session."
+            )
+        self.budget.used += 1
+
+    @contextmanager
+    def request(self) -> Iterator[BudgetedClient]:
+        """Charge one unit now; chat() calls inside the block are free."""
+        self._charge()
+        self._in_request = True
+        try:
+            yield self
+        finally:
+            self._in_request = False
 
     @property
     def model(self) -> str:
@@ -270,10 +295,6 @@ class BudgetedClient:
         tools: Sequence[Mapping[str, Any]] | None = None,
         tool_choice: str | None = None,
     ) -> ChatReply:
-        if self.budget.remaining <= 0:
-            raise LLMBudgetExceeded(
-                f"This session has used its {self.budget.limit} AI requests. Reload the "
-                "page later to start a new session."
-            )
-        self.budget.used += 1
+        if not self._in_request:
+            self._charge()
         return self.inner.chat(messages, tools, tool_choice)

@@ -103,4 +103,6 @@ def render(data: MenuData, include_unreliable: bool) -> None:
         _render_result(stored[1], facts)
     elif stored:
         st.caption("Settings or data changed since the last summary: generate again.")
-    st.caption(f"AI requests left in this session: {remaining_calls()}")
+    st.caption(
+        f"AI requests left in this session: {remaining_calls()} (one per summary or question)"
+    )

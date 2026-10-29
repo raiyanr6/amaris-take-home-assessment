@@ -109,8 +109,9 @@ tests/          pytest (no __init__.py); conftest.py has fixture CSV builders; f
 - **Prompt changes:** bump `prompts.PROMPT_VERSION`.
 - **Tests:** never call the network. Inject `FakeLLMClient`; the UI picks it up from
   `st.session_state["llm_client"]`.
-- **Protecting the free key:** 30 AI calls per session (`BudgetedClient`); summaries are
-  cached on (facts, focus, model).
+- **Protecting the free key:** 30 AI requests per session (`BudgetedClient`): one per
+  summary or question, however many tool rounds or retries it takes
+  (`BudgetedClient.request()`). Summaries are cached on (facts, focus, model).
 
 ## Commands
 ```bash

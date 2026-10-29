@@ -103,7 +103,8 @@ runs code:
 Without a key, the two AI tabs explain how to add one and the rest of the app works as
 before. The app is protected for a shared free-tier key in three ways:
 - rate limits (429) are retried with backoff, honouring `retry-after`;
-- each browser session is capped at 30 AI calls;
+- each browser session is capped at 30 AI requests (one per summary or question, however
+  many tool rounds it takes);
 - summaries are cached per (data, focus, model), so clicking Generate again doesn't re-bill.
 
 ### The two AI tabs

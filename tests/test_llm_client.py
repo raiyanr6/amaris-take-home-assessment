@@ -144,3 +144,16 @@ def test_budget_caps_calls() -> None:
     with pytest.raises(LLMBudgetExceeded):
         client.chat([])
     assert budget.used == 2 and budget.remaining == 0
+
+
+def test_budget_request_costs_one_unit_however_many_calls() -> None:
+    budget = CallBudget(limit=2)
+    client = BudgetedClient(FakeLLMClient(), budget)
+    with client.request():
+        for _ in range(7):  # tool rounds and retries of one question
+            client.chat([])
+    assert budget.used == 1
+    client.chat([])  # outside a request: one unit per call again
+    with pytest.raises(LLMBudgetExceeded), client.request():
+        client.chat([])
+    assert budget.used == 2

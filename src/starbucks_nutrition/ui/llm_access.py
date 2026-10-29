@@ -19,7 +19,6 @@ from starbucks_nutrition.llm.client import (
     CallBudget,
     GroqClient,
     LLMBudgetExceeded,
-    LLMClient,
     LLMError,
     LLMNotConfigured,
     LLMRateLimited,
@@ -53,7 +52,7 @@ def _secrets() -> Mapping[str, Any] | None:
         return None
 
 
-def get_client() -> LLMClient:
+def get_client() -> BudgetedClient:
     """The session's LLM client, wrapped in the per-session call budget.
 
     Raises LLMNotConfigured when no key is set (the tab then shows SETUP_MESSAGE).

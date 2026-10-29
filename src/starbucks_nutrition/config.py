@@ -254,8 +254,9 @@ LLM_REASONING_EFFORT: Final = "low"
 LLM_TIMEOUT_S: Final = 30.0
 LLM_MAX_ATTEMPTS: Final = 3  # 1 call + 2 retries on 429 / 5xx / timeouts
 LLM_MAX_BACKOFF_S: Final = 20.0
-# Protects a free-tier key once deployed: API calls per browser session.
-LLM_MAX_CALLS_PER_SESSION: Final = 30
+# Protects a free-tier key once deployed: AI requests per browser session. One summary
+# or one question is one request, however many tool rounds or retries it takes.
+LLM_MAX_REQUESTS_PER_SESSION: Final = 30
 # Untrusted text (item names from uploaded CSVs) is cut to this length before it is
 # shown to the model.
 LLM_MAX_NAME_CHARS: Final = 100

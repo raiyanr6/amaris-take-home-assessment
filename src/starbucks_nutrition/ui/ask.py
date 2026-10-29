@@ -6,7 +6,7 @@ import logging
 
 import streamlit as st
 
-from starbucks_nutrition.llm.client import LLMClient, LLMError, LLMNotConfigured
+from starbucks_nutrition.llm.client import BudgetedClient, LLMError, LLMNotConfigured
 from starbucks_nutrition.llm.qa import (
     MAX_QUESTION_CHARS,
     QAResult,
@@ -113,7 +113,7 @@ def render(data: MenuData, include_unreliable: bool) -> None:
     )
     cols = st.columns([1, 3])
     cols[0].button("Clear chat", key="chat_clear", on_click=_clear, disabled=not history)
-    cols[1].caption(f"AI requests left in this session: {remaining_calls()}")
+    cols[1].caption(f"AI questions left: {remaining_calls()}")
 
 
 def _example_buttons() -> None:
@@ -123,15 +123,18 @@ def _example_buttons() -> None:
 
 
 def _ask(
-    client: LLMClient,
+    client: BudgetedClient,
     question: str,
     data: MenuData,
     include_unreliable: bool,
     history: list[QAResult],
 ) -> None:
-    """One code path for typed and example questions: answer, append, render."""
+    """One code path for typed and example questions: answer, append, render.
+
+    The question is one unit of the session budget, whatever its tool rounds/retries.
+    """
     try:
-        with st.spinner("Looking it up…"):
+        with st.spinner("Looking it up…"), client.request():
             result = answer_question(
                 client,
                 question,

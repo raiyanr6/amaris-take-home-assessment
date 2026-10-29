@@ -92,6 +92,24 @@ def test_unexpected_error_in_ask_shows_friendly_message() -> None:
     assert any("Something went wrong" in e.value for e in at.error)
 
 
+def test_question_with_several_tool_rounds_costs_one_unit() -> None:
+    client = FakeLLMClient(
+        [
+            reply(None, tool_call("data_availability")),
+            reply(None, tool_call("top_items", {"metric": "carb_g", "category": "drink"})),
+            reply("Carbs are the sugar proxy; see the list."),
+        ]
+    )
+    at = _app(client)
+    at.chat_input(key="chat_box").set_value("Which drinks have the most sugar?").run()
+    assert not at.exception and len(client.calls) == 3
+    assert at.session_state["llm_budget"].used == 1
+    assert any(
+        f"AI questions left: {config.LLM_MAX_REQUESTS_PER_SESSION - 1}" in c.value
+        for c in at.caption
+    )
+
+
 def test_clear_chat() -> None:
     at = _app(FakeLLMClient())
     at.chat_input(key="chat_box").set_value("hello?").run()
