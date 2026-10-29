@@ -234,3 +234,20 @@ CAFFEINE_DEFAULT_STATUS: Final = "unlikely"
 # items have a little), so the proxy is not applied to food: it reports "unknown".
 CAFFEINE_FOOD_STATUS: Final = "unknown"
 CAFFEINE_STATUSES: Final[tuple[str, ...]] = ("likely", "unlikely", "unknown")
+
+# --------------------------------------------------------------------------------------
+# LLM (Groq)
+# --------------------------------------------------------------------------------------
+# Production model on Groq (console.groq.com/docs/models, checked 2026-10-29) with tool
+# calling incl. parallel calls. Override with the GROQ_MODEL env var / secret.
+LLM_DEFAULT_MODEL: Final = "llama-3.3-70b-versatile"
+LLM_TEMPERATURE: Final = 0.2  # factual narration, not creativity
+LLM_MAX_TOKENS: Final = 900
+LLM_TIMEOUT_S: Final = 30.0
+LLM_MAX_ATTEMPTS: Final = 3  # 1 call + 2 retries on 429 / 5xx / timeouts
+LLM_MAX_BACKOFF_S: Final = 20.0
+# Protects a free-tier key once deployed: API calls per browser session.
+LLM_MAX_CALLS_PER_SESSION: Final = 30
+# Untrusted text (item names from uploaded CSVs) is cut to this length before it is
+# shown to the model.
+LLM_MAX_NAME_CHARS: Final = 100
