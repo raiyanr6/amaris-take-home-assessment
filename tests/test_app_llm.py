@@ -85,6 +85,13 @@ def test_chat_input_rate_limited_shows_friendly_warning() -> None:
     assert any("rate-limited" in w.value and "7 seconds" in w.value for w in at.warning)
 
 
+def test_unexpected_error_in_ask_shows_friendly_message() -> None:
+    at = _app(FakeLLMClient([RuntimeError("bug")]))
+    at.chat_input(key="chat_box").set_value("Which food is highest in fiber?").run()
+    assert not at.exception
+    assert any("Something went wrong" in e.value for e in at.error)
+
+
 def test_clear_chat() -> None:
     at = _app(FakeLLMClient())
     at.chat_input(key="chat_box").set_value("hello?").run()

@@ -31,16 +31,32 @@ def executor(real_menu) -> ToolExecutor:
         ("top_items", {"metric": "calories", "n": 21}, "between 1 and 20"),
         ("top_items", {"metric": "calories", "n": "5; DROP"}, "integer"),
         ("filter_items", {"ranges": {"price": {"max": 3}}}, "Invalid range metric"),
-        ("filter_items", {"ranges": {"calories": {"max": "500"}}}, "must be numbers"),
+        ("filter_items", {"ranges": {"calories": {"max": "500"}}}, "finite numbers"),
         ("filter_items", {"limit": 100}, "between 1 and 25"),
         ("get_item", {"name": ""}, "name must be text"),
         ("top_items", {"metric": "calories", "colour": "red"}, "Invalid arguments"),
         ("delete_rows", {}, "Unknown tool"),
+        ("filter_items", {"ranges": [1, 2]}, "ranges must be an object"),
+        ("filter_items", {"ranges": "cal<500"}, "ranges must be an object"),
+        ("filter_items", {"ranges": {"calories": 500}}, 'must look like {"min"'),
+        ("filter_items", '{"limit": Infinity}', "integer"),
+        ("top_items", '{"metric": "calories", "n": NaN}', "integer"),
+        ("filter_items", '{"ranges": {"calories": {"max": NaN}}}', "finite numbers"),
+        ("filter_items", '{"ranges": {"calories": {"min": -Infinity}}}', "finite numbers"),
     ],
 )
 def test_bad_arguments_return_error_objects(executor, name, args, message) -> None:
     result = executor.execute(name, args)
     assert message in result["error"]
+
+
+def test_unexpected_tool_failure_becomes_error_object(executor, monkeypatch) -> None:
+    def boom(**_: object) -> dict:
+        raise KeyError("surprise")
+
+    monkeypatch.setattr(executor, "get_stats", boom)
+    result = executor.execute("get_stats", {"category": "drink", "metric": "calories"})
+    assert "could not run" in result["error"]
 
 
 def test_malformed_json_arguments(executor) -> None:

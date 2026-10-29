@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import logging
+
 import streamlit as st
 
 from starbucks_nutrition.llm.client import LLMClient, LLMError, LLMNotConfigured
@@ -21,6 +23,8 @@ from starbucks_nutrition.ui.llm_access import (
     show_setup_message,
 )
 
+logger = logging.getLogger(__name__)
+
 CHAT_KEY = "chat_history"
 PENDING_KEY = "chat_pending"
 INPUT_KEY = "chat_box"
@@ -30,6 +34,10 @@ EXAMPLES: tuple[str, ...] = (
     "What's the average caffeine content for drinks?",
     "Which drinks have the most sugar?",
     "How do drinks and food compare on calories?",
+)
+UNEXPECTED_ERROR = (
+    "Something went wrong while answering that question. Please try rephrasing it; "
+    "the rest of the app still works."
 )
 
 
@@ -135,6 +143,12 @@ def _ask(
         with st.chat_message("user"):
             st.markdown(question)
         show_error(exc)
+        return
+    except Exception:  # a bug must not reach the user as a traceback
+        logger.exception("Unexpected error while answering a question")
+        with st.chat_message("user"):
+            st.markdown(question)
+        st.error(UNEXPECTED_ERROR)
         return
     history.append(result)
     _render_turn(result)

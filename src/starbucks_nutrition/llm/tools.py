@@ -10,6 +10,8 @@ reads, and uploaded files are untrusted.
 from __future__ import annotations
 
 import json
+import logging
+import math
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from typing import Any
@@ -32,9 +34,16 @@ MAX_N = 20
 MAX_ROWS = 25
 MAX_SEARCH_CHARS = 80
 
+logger = logging.getLogger(__name__)
+
 
 class ToolArgumentError(ValueError):
     """Invalid tool argument; turned into an error object for the model."""
+
+
+def _is_number(value: Any) -> bool:
+    """A finite int/float. Python's json accepts NaN/Infinity, so finiteness is checked."""
+    return not isinstance(value, bool) and isinstance(value, int | float) and math.isfinite(value)
 
 
 def _schema(name: str, description: str, properties: dict[str, Any], required=()) -> dict:
@@ -156,7 +165,7 @@ class ToolExecutor:
     def _int(value: Any, name: str, default: int, maximum: int) -> int:
         if value is None:
             return default
-        if isinstance(value, bool) or not isinstance(value, int | float) or value != int(value):
+        if not _is_number(value) or value != int(value):
             raise ToolArgumentError(f"{name} must be an integer between 1 and {maximum}")
         if not 1 <= int(value) <= maximum:
             raise ToolArgumentError(f"{name} must be between 1 and {maximum}")
@@ -257,6 +266,8 @@ class ToolExecutor:
         order = self._choice(order, ("highest", "lowest"), "order", "highest")
         if upper_inclusive is not None and not isinstance(upper_inclusive, bool):
             raise ToolArgumentError("upper_inclusive must be true or false")
+        if ranges is not None and not isinstance(ranges, Mapping):
+            raise ToolArgumentError('ranges must be an object like {"calories": {"max": 500}}')
         parsed: dict[str, tuple[float | None, float | None]] = {}
         for metric, bounds in (ranges or {}).items():
             self._choice(metric, NUTRIENT_COLUMNS, "range metric")
@@ -264,10 +275,8 @@ class ToolExecutor:
                 raise ToolArgumentError(f'Range for {metric} must look like {{"min": 1, "max": 2}}')
             low, high = bounds.get("min"), bounds.get("max")
             for bound in (low, high):
-                if bound is not None and (
-                    isinstance(bound, bool) or not isinstance(bound, int | float)
-                ):
-                    raise ToolArgumentError(f"Range bounds for {metric} must be numbers")
+                if bound is not None and not _is_number(bound):
+                    raise ToolArgumentError(f"Range bounds for {metric} must be finite numbers")
             parsed[metric] = (low, high)
         statuses = ()
         if caffeine_status is not None:
@@ -389,7 +398,11 @@ class ToolExecutor:
         }
 
     def execute(self, name: str, arguments: str | Mapping[str, Any] | None) -> dict[str, Any]:
-        """Run one tool call. Never raises: problems become {"error": ...} for the model."""
+        """Run one tool call. Never raises: problems become {"error": ...} for the model.
+
+        Validation covers the argument shapes we know of; the final catch-all keeps an
+        argument shape nobody anticipated from crashing the whole answer.
+        """
         tools = self._tools()
         if name not in tools:
             return {"error": f"Unknown tool {name!r}", "allowed": list(tools)}
@@ -409,3 +422,6 @@ class ToolExecutor:
             return {"error": str(exc)}
         except TypeError as exc:  # unexpected argument names
             return {"error": f"Invalid arguments for {name}: {exc}"}
+        except Exception:
+            logger.exception("Tool %s failed on arguments %r", name, args)
+            return {"error": f"{name} could not run with these arguments; try different ones."}
