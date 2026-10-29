@@ -35,7 +35,8 @@ _STATS = ["count", "mean", "median", "min", "max", "std", "sum"]
 def add_derived_metrics(df: pd.DataFrame) -> pd.DataFrame:
     """Add per-item ratios. Division by zero yields NaN (not inf, not an error).
 
-    - fat_to_protein: g fat per g protein; NaN when protein is 0 (45 drinks have 0 g).
+    - fat_to_protein: g fat per g protein; NaN when protein is 0 (31 drinks have 0 g, 30
+      of them analysed: Nariño 70 Cold Brew with Milk is excluded as unreliable).
     - protein_per_100kcal / fiber_per_100kcal: nutrient density; NaN when calories is 0.
     """
     protein = df["protein_g"].where(df["protein_g"] > 0)
