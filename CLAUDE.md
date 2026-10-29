@@ -94,8 +94,9 @@ tests/          pytest (no __init__.py); conftest.py has fixture CSV builders; f
     "please rephrase" answer.
   - Q&A uses the loaded menu and the UI's `include_unreliable` setting.
 - **Grounding:** `verify_numbers()` checks every figure in the output against the sources:
-  the facts, or ALL tool results plus the tool arguments (never the raw question, so a
-  number the user typed is not "verified"). Item names are removed first, since they can
+  the facts, or ALL tool results plus the tool arguments, including those of the history
+  turns sent to the model (never the raw question, so a number the user typed is not
+  "verified"). Item names are removed first, since they can
   contain digits. The UI shows the badge.
 - **Untrusted input:** both the user's question and uploaded item names are untrusted.
   - Both system prompts include `DATA_NOT_INSTRUCTIONS`.

@@ -194,7 +194,7 @@ def test_other_llm_errors_propagate(real_menu) -> None:
 
 def test_question_capped_and_history_passed(real_menu) -> None:
     client = FakeLLMClient()
-    history = [(f"q{i}", f"a{i}") for i in range(5)]
+    history = [qa.QAResult(question=f"q{i}", answer=f"a{i}") for i in range(5)]
     result = qa.answer_question(client, "x" * 900, real_menu[0], history=history)
     sent = client.calls[0]["messages"]
     assert result.truncated_question and len(sent[-1]["content"]) == qa.MAX_QUESTION_CHARS
@@ -256,3 +256,27 @@ def test_number_only_in_question_is_not_verified(real_menu) -> None:
     )
     result = qa.answer_question(client, "Confirm the latte has 999 kcal", real_menu[0])
     assert result.grounding.unverified == ("999",)
+
+
+def test_follow_up_reusing_previous_lookup_figure_is_verified(real_menu) -> None:
+    menu = real_menu[0]
+    first = qa.answer_question(
+        FakeLLMClient(
+            [
+                reply(None, tool_call("get_stats", {"category": "drink", "metric": "calories"})),
+                reply("Drinks with data average 141 kcal."),
+            ]
+        ),
+        "Average drink calories?",
+        menu,
+    )
+    assert first.grounding.ok
+    # The follow-up answers from memory (no new lookup) and repeats 141.
+    follow_up = qa.answer_question(
+        FakeLLMClient([reply("As before, drinks average 141 kcal; food was not asked.")]),
+        "Remind me of the drink figure?",
+        menu,
+        history=[first],
+    )
+    assert follow_up.trace == [] and follow_up.grounding.ok
+    assert follow_up.grounding.verified == ("141",)

@@ -3,7 +3,8 @@
 Why tool calling: the model never sees the table (no context bloat, no misreading of
 rows) and never writes code (no exec of model output). It picks a read-only tool, the
 tool runs tested pandas code, and the model phrases the result. Every number in the
-answer is then checked against ALL tool results of the exchange (grounding).
+answer is then checked against ALL tool results of the exchange, including the lookups
+of the history turns the model was shown (grounding).
 """
 
 from __future__ import annotations
@@ -87,36 +88,45 @@ def _parsed(arguments: str) -> Any:
         return {}
 
 
-def _history_messages(history: Sequence[tuple[str, str]]) -> list[dict[str, str]]:
+def _history_messages(history: Sequence[QAResult]) -> list[dict[str, str]]:
     messages: list[dict[str, str]] = []
-    for question, answer in list(history)[-HISTORY_TURNS:]:
+    for turn in history:
         messages += [
-            {"role": "user", "content": question[:MAX_QUESTION_CHARS]},
-            {"role": "assistant", "content": answer},
+            {"role": "user", "content": turn.question[:MAX_QUESTION_CHARS]},
+            {"role": "assistant", "content": turn.answer},
         ]
     return messages
+
+
+def _grounding_sources(trace: Sequence[dict[str, Any]]) -> list[Any]:
+    """Each lookup's result and its arguments ("under 500" is a constraint, not an
+    invented figure)."""
+    return [step["result"] for step in trace] + [_parsed(step["arguments"]) for step in trace]
 
 
 def answer_question(
     client: LLMClient,
     question: str,
     menu: pd.DataFrame,
-    history: Sequence[tuple[str, str]] = (),
+    history: Sequence[QAResult] = (),
     include_unreliable: bool = False,
 ) -> QAResult:
     """Answer ``question`` about ``menu`` (sample or uploaded) via read-only tools.
 
-    ``history`` holds the last (question, answer) pairs so follow-ups like "and for
-    food?" work. LLM errors other than a failed tool call (rate limit, no key, budget)
-    propagate for the UI to explain.
+    ``history`` holds the previous turns; the last HISTORY_TURNS are sent so follow-ups
+    like "and for food?" work. Their lookups are grounding sources too, because the
+    model may reuse a figure from an earlier answer without looking it up again. LLM
+    errors other than a failed tool call (rate limit, no key, budget) propagate for the
+    UI to explain.
     """
     question = question.strip()
     truncated = len(question) > MAX_QUESTION_CHARS
     question = question[:MAX_QUESTION_CHARS]
     executor = ToolExecutor(menu, include_unreliable)
+    recent = list(history)[-HISTORY_TURNS:]
     messages: list[dict[str, Any]] = [
         {"role": "system", "content": QA_SYSTEM},
-        *_history_messages(history),
+        *_history_messages(recent),
         {"role": "user", "content": question},
     ]
     trace: list[dict[str, Any]] = []
@@ -171,11 +181,12 @@ def answer_question(
     except _LookupFailed:
         answer = LOOKUP_FAILED_ANSWER
 
-    # Grounding sources: every tool result, plus the arguments of each lookup ("under
-    # 500" is a constraint, not an invented figure). The question itself is NOT a source:
-    # a number the user merely typed ("confirm it has 999 kcal") must not get a tick.
-    results: list[Any] = [step["result"] for step in trace]
-    results += [_parsed(step["arguments"]) for step in trace]
+    # Grounding sources: this turn's lookups and those of the history turns sent. The
+    # question itself is NOT a source: a number the user merely typed ("confirm it has
+    # 999 kcal") must not get a tick.
+    results = _grounding_sources(trace)
+    for turn in recent:
+        results += _grounding_sources(turn.trace)
     return QAResult(
         question=question,
         answer=answer,

@@ -136,7 +136,7 @@ def _ask(
                 client,
                 question,
                 data.menu,
-                history=[(t.question, t.answer) for t in history],
+                history=history,
                 include_unreliable=include_unreliable,
             )
     except LLMError as exc:
