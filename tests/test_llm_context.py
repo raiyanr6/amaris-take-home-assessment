@@ -42,6 +42,8 @@ def test_facts_carry_coverage_caveats_and_availability(real_facts) -> None:
     unavailable = real_facts["availability"]["unavailable"]
     assert set(unavailable["food"]) == {"sodium_mg", "sugar_g", "caffeine_mg"}
     assert set(unavailable["drink"]) == {"sugar_g", "caffeine_mg"}
+    by_metric = real_facts["availability"]["by_metric"]
+    assert by_metric["sodium_mg"] == "drink: available, food: NOT available"
     assert real_facts["units"]["calories"] == "kcal"
 
 

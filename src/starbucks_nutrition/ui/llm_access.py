@@ -41,7 +41,7 @@ SETUP_MESSAGE = """\
    `streamlit run streamlit_app.py`.
 3. Streamlit Cloud: add `GROQ_API_KEY = "..."` under *App settings → Secrets*.
 
-Optional: `GROQ_MODEL` picks another Groq model (default `llama-3.3-70b-versatile`).
+Optional: `GROQ_MODEL` picks another Groq model (default `openai/gpt-oss-120b`).
 """
 
 

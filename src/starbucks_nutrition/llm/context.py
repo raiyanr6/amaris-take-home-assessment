@@ -136,8 +136,18 @@ def _availability(menu: pd.DataFrame) -> dict[str, Any]:
         str(cat): list(group.loc[~group["available"], "metric"])
         for cat, group in avail.groupby(CATEGORY_COL)
     }
+    # Also keyed by metric, in words: models misread "which category lacks what" from the
+    # category-keyed lists alone (e.g. claimed drinks lack sodium).
+    by_metric = {
+        str(metric): ", ".join(
+            f"{cat}: {'available' if ok else 'NOT available'}"
+            for cat, ok in zip(group[CATEGORY_COL], group["available"], strict=True)
+        )
+        for metric, group in avail.groupby("metric", sort=False)
+    }
     return {
         "unavailable": unavailable,
+        "by_metric": by_metric,
         "notes": [
             "Sugar is not in the data; carbohydrates (carb_g, which include sugars) are the "
             "closest available proxy and must be labelled as such.",

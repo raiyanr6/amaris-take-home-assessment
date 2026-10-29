@@ -80,6 +80,13 @@ def _chat_once_retried(
     raise _LookupFailed
 
 
+def _parsed(arguments: str) -> Any:
+    try:
+        return json.loads(arguments or "{}")
+    except json.JSONDecodeError:
+        return {}
+
+
 def _history_messages(history: Sequence[tuple[str, str]]) -> list[dict[str, str]]:
     messages: list[dict[str, str]] = []
     for question, answer in list(history)[-HISTORY_TURNS:]:
@@ -164,7 +171,11 @@ def answer_question(
     except _LookupFailed:
         answer = LOOKUP_FAILED_ANSWER
 
-    results = [step["result"] for step in trace]
+    # Grounding sources: every tool result, plus the numbers the user and the model put
+    # into the lookups ("under 500" is a constraint, not an invented figure).
+    results: list[Any] = [step["result"] for step in trace]
+    results += [_parsed(step["arguments"]) for step in trace]
+    results.append(question)
     return QAResult(
         question=question,
         answer=answer,

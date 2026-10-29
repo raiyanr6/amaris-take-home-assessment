@@ -106,7 +106,11 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
                 "description": "Name-based caffeine estimate (drinks only; food is unknown).",
             },
             "search": {"type": "string", "description": "Substring of the item name."},
-            "sort_by": _METRIC,
+            "sort_by": {
+                **_METRIC,
+                "description": "Metric to sort by, e.g. protein_g for 'high in protein'. "
+                "Default: the first range metric, else calories.",
+            },
             "order": {"type": "string", "enum": ["highest", "lowest"]},
             "limit": {"type": "integer", "minimum": 1, "maximum": MAX_ROWS},
         },
@@ -296,6 +300,7 @@ class ToolExecutor:
             "total_matches": len(result),
             "returned": len(rows),
             "upper_bounds": "<= (up to)" if upper_inclusive else "< (under)",
+            "sorted_by": f"{sort_metric} ({order} first)",
             "items": rows,
             "notes": range_filter_notes(scope_df, parsed)
             + (["caffeine_status is a name-based estimate, not mg."] if statuses else []),

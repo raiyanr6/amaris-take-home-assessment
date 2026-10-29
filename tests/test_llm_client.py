@@ -113,11 +113,27 @@ def test_auth_error_is_not_configured_and_hides_details() -> None:
     assert info.value.__cause__ is None and "boom" not in str(info.value)
 
 
-def test_other_4xx_is_llm_error_without_retry() -> None:
+def test_unknown_model_names_the_setting() -> None:
     client, sdk, _ = _client([_status_error(groq.NotFoundError, 404)])
-    with pytest.raises(LLMError, match="404"):
+    with pytest.raises(LLMError, match="GROQ_MODEL"):
         client.chat([])
     assert len(sdk.kwargs) == 1
+
+
+def test_other_4xx_is_llm_error_without_retry() -> None:
+    client, sdk, _ = _client([_status_error(groq.PermissionDeniedError, 403)])
+    with pytest.raises(LLMError, match="403"):
+        client.chat([])
+    assert len(sdk.kwargs) == 1
+
+
+def test_reasoning_settings_only_for_gpt_oss() -> None:
+    sdk = FakeGroqSDK([sdk_response(), sdk_response()])
+    GroqClient(model="openai/gpt-oss-120b", sdk=sdk).chat([])
+    GroqClient(model="llama-3.1-8b-instant", sdk=sdk).chat([])
+    assert sdk.kwargs[0]["reasoning_effort"] == "low"
+    assert sdk.kwargs[0]["include_reasoning"] is False
+    assert "reasoning_effort" not in sdk.kwargs[1]
 
 
 def test_budget_caps_calls() -> None:

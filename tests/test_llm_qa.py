@@ -216,3 +216,16 @@ def test_generate_summary_grounded(real_menu) -> None:
     assert result.prompt_tokens == 10 and result.latency_s >= 0
     with pytest.raises(ValueError, match="Unknown focus"):
         generate_summary(client, facts, "poetry")
+
+
+def test_grounding_accepts_numbers_from_question_and_arguments(real_menu) -> None:
+    args = {"category": "food", "ranges": {"calories": {"max": 500}, "protein_g": {"min": 10}}}
+    client = FakeLLMClient(
+        [
+            reply(None, tool_call("filter_items", {**args, "sort_by": "protein_g"})),
+            reply("Food under 500 kcal with at least 10 g protein: see the list."),
+        ]
+    )
+    result = qa.answer_question(client, "Food under 500 calories, high protein?", real_menu[0])
+    assert result.grounding.ok and set(result.grounding.verified) == {"500", "10"}
+    assert result.trace[0]["result"]["sorted_by"] == "protein_g (highest first)"

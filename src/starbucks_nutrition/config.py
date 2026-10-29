@@ -238,11 +238,19 @@ CAFFEINE_STATUSES: Final[tuple[str, ...]] = ("likely", "unlikely", "unknown")
 # --------------------------------------------------------------------------------------
 # LLM (Groq)
 # --------------------------------------------------------------------------------------
-# Production model on Groq (console.groq.com/docs/models, checked 2026-10-29) with tool
-# calling incl. parallel calls. Override with the GROQ_MODEL env var / secret.
-LLM_DEFAULT_MODEL: Final = "llama-3.3-70b-versatile"
+# Production model on Groq (console.groq.com/docs/models, checked 2026-10-29). The plan
+# was llama-3.3-70b-versatile, but the project key gets 404 model_not_found for it (its
+# /models list offers gpt-oss-120b/20b), so the default is the strongest available
+# production model. Override with the GROQ_MODEL env var / secret.
+LLM_DEFAULT_MODEL: Final = "openai/gpt-oss-120b"
 LLM_TEMPERATURE: Final = 0.2  # factual narration, not creativity
-LLM_MAX_TOKENS: Final = 900
+# Generous cap: gpt-oss reasons before answering and the docs don't say whether those
+# tokens count toward the limit; a too-small cap would cut the visible answer off.
+LLM_MAX_TOKENS: Final = 2000
+# Reasoning models (gpt-oss): little reasoning is needed to narrate given numbers, and
+# less reasoning = fewer tokens against the free tier's tokens-per-minute limit.
+LLM_REASONING_MODEL_PREFIXES: Final[tuple[str, ...]] = ("openai/gpt-oss",)
+LLM_REASONING_EFFORT: Final = "low"
 LLM_TIMEOUT_S: Final = 30.0
 LLM_MAX_ATTEMPTS: Final = 3  # 1 call + 2 retries on 429 / 5xx / timeouts
 LLM_MAX_BACKOFF_S: Final = 20.0

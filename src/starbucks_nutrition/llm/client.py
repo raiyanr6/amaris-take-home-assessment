@@ -180,6 +180,10 @@ class GroqClient:
         if tools:
             kwargs["tools"] = list(tools)
             kwargs["tool_choice"] = tool_choice or "auto"
+        if self.model.startswith(config.LLM_REASONING_MODEL_PREFIXES):
+            # Keep the reasoning short and out of the reply (only the answer is shown).
+            kwargs["reasoning_effort"] = config.LLM_REASONING_EFFORT
+            kwargs["include_reasoning"] = False
 
         for attempt in range(1, self.max_attempts + 1):
             last = attempt == self.max_attempts
@@ -200,6 +204,11 @@ class GroqClient:
                     raise LLMToolCallFailed("The model produced an invalid tool call.") from None
                 logger.warning("Groq 400: %s", exc.message)
                 raise LLMError("The request to the language model was rejected.") from None
+            except groq.NotFoundError:
+                raise LLMError(
+                    f"The model {self.model!r} is not available for this API key. Set "
+                    "GROQ_MODEL to a model listed at console.groq.com/docs/models."
+                ) from None
             except groq.APIStatusError as exc:
                 if exc.status_code < 500 or last:
                     logger.warning("Groq HTTP %s", exc.status_code)
