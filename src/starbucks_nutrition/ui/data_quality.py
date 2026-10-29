@@ -56,6 +56,14 @@ def _report_card(category: str, report: QualityReport, source: str) -> None:
                 if report.invalid_values
                 else "**none**"
             ),
+            "Values given as '<x' (stored as half of x, e.g. <1 -> 0.5): "
+            + (
+                ", ".join(
+                    f"{analysis.metric_label(c)} {n}" for c, n in report.approximate_values.items()
+                )
+                if report.approximate_values
+                else "**none**"
+            ),
             "Columns not in this file: "
             + (", ".join(analysis.metric_label(c) for c in report.columns_unavailable) or "none"),
         ]

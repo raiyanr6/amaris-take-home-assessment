@@ -44,6 +44,8 @@ def _print_report(report: QualityReport) -> None:
         print(f"  columns ignored: {', '.join(report.unknown_columns)}")
     if report.invalid_values:
         print(f"  invalid values set to NaN: {report.invalid_values}")
+    if report.approximate_values:
+        print(f"  '<x' values stored as half of x: {report.approximate_values}")
     for drop in report.conflicts_resolved:
         if drop["rule"] != "1_exact_duplicate":
             print(

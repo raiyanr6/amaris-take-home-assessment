@@ -183,6 +183,23 @@ def test_numbers_with_units_are_parsed(raw: str, expected: float) -> None:
     assert df.loc[0, "calories"] == expected
 
 
+@pytest.mark.parametrize(("raw", "expected"), [("1 200", 1200.0), ("12 345", 12345.0)])
+def test_space_thousands_separator(raw: str, expected: float) -> None:
+    df, report = clean_bytes(make_csv(DRINK_HEADER, f"Espresso,{raw},0,2,0,1,0"))
+    assert df.loc[0, "calories"] == expected
+    assert report.invalid_values == {}
+
+
+@pytest.mark.parametrize("raw", ["<1", "< 1 g", "<1g", " <1 "])
+def test_less_than_values_are_halved_and_counted_as_approximate(raw: str) -> None:
+    df, report = clean_bytes(
+        make_csv(DRINK_HEADER, f"Espresso,10,{raw},2,{raw},1,0", "Latte,190,7,19,0,13,170")
+    )
+    assert df.loc[0, "fat_g"] == 0.5 and df.loc[0, "fiber_g"] == 0.5
+    assert report.approximate_values == {"fat_g": 1, "fiber_g": 1}
+    assert report.invalid_values == {}
+
+
 def test_unparseable_value_becomes_nan_and_is_counted() -> None:
     df, report = clean_bytes(make_csv(DRINK_HEADER, "Espresso,lots,0,2,0,1,0"))
     assert math.isnan(df.loc[0, "calories"])

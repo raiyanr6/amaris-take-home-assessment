@@ -68,6 +68,7 @@ class QualityReport:
     suspicious: list[dict[str, Any]] = field(default_factory=list)
     missing_counts: dict[str, int] = field(default_factory=dict)
     invalid_values: dict[str, int] = field(default_factory=dict)
+    approximate_values: dict[str, int] = field(default_factory=dict)  # "<1" -> 0.5
     columns_unavailable: list[str] = field(default_factory=list)
     unknown_columns: list[str] = field(default_factory=list)
 
@@ -216,28 +217,36 @@ def validate_schema(df: pd.DataFrame, original_columns: list[object] | None = No
 # --------------------------------------------------------------------------------------
 # Value cleaning
 # --------------------------------------------------------------------------------------
-# A number optionally followed by a unit, e.g. "5", "5.5", "5g", "5 mg", "120 kcal".
-_NUMBER_WITH_UNIT = r"^([-+]?(?:\d+\.?\d*|\.\d+))\s*(?:kcal|cal|mg|g)?$"
+# A number optionally preceded by "<" and followed by a unit, e.g. "5", "5.5", "5g",
+# "5 mg", "120 kcal", "<1", "< 1 g".
+_NUMBER_WITH_UNIT = r"^(<\s*)?([-+]?(?:\d+\.?\d*|\.\d+))\s*(?:kcal|cal|mg|g)?$"
+# Thousands separators: a comma, space, no-break or narrow no-break space between a digit
+# and exactly three digits ("1,200", "1 200").
+_THOUSANDS_SEPARATOR = r"(?<=\d)[,   ](?=\d{3}(?!\d))"
 
 
-def _coerce_numeric(values: pd.Series) -> tuple[pd.Series, pd.Series, pd.Series]:
-    """Convert raw strings to floats. Returns (numbers, invalid_mask, negative_mask).
+def _coerce_numeric(values: pd.Series) -> tuple[pd.Series, pd.Series, pd.Series, pd.Series]:
+    """Convert raw strings to floats. Returns (numbers, invalid, negative, approximate).
 
     - Missing tokens ("-", "N/A", blank...) -> NaN. Never 0: unknown is not zero.
     - Units are stripped ("5g" -> 5) since the column already defines the unit.
-    - Thousands separators are removed ("1,200" -> 1200).
+    - Thousands separators are removed ("1,200" and "1 200" -> 1200).
+    - "Less than" values ("<1", "< 1 g") -> limit * config.LESS_THAN_VALUE_FACTOR
+      (0.5), flagged as approximate.
     - Anything else unparseable (e.g. "lots") -> NaN and counted as invalid.
     - Negative values are physically impossible for nutrients -> NaN and counted.
     """
     text = values.astype("object").where(values.notna(), "").astype(str).str.strip()
     is_missing = text.str.lower().isin(config.MISSING_TOKENS)
-    text = text.str.replace(r"(?<=\d),(?=\d{3}(?!\d))", "", regex=True)
-    number_text = text.str.extract(_NUMBER_WITH_UNIT, flags=re.IGNORECASE)[0]
-    numbers = pd.to_numeric(number_text, errors="coerce").astype("float64")
+    text = text.str.replace(_THOUSANDS_SEPARATOR, "", regex=True)
+    parts = text.str.extract(_NUMBER_WITH_UNIT, flags=re.IGNORECASE)
+    numbers = pd.to_numeric(parts[1], errors="coerce").astype("float64")
+    approximate = parts[0].notna() & numbers.notna()
+    numbers = numbers.mask(approximate, numbers * config.LESS_THAN_VALUE_FACTOR)
 
     invalid = numbers.isna() & ~is_missing
     negative = numbers < 0
-    return numbers.mask(negative), invalid, negative
+    return numbers.mask(negative), invalid, negative, approximate & ~negative
 
 
 def _quality_flags(df: pd.DataFrame) -> pd.DataFrame:
@@ -434,8 +443,17 @@ def clean(df: pd.DataFrame, category: str) -> tuple[pd.DataFrame, QualityReport]
             report.columns_unavailable.append(col)
             out[col] = np.nan
             continue
-        numbers, invalid, negative = _coerce_numeric(out[col])
+        numbers, invalid, negative, approximate = _coerce_numeric(out[col])
         out[col] = numbers
+        if approximate.any():
+            report.approximate_values[col] = int(approximate.sum())
+            logger.info(
+                "[%s] %s: %d '<x' values stored as x * %s",
+                category,
+                col,
+                approximate.sum(),
+                config.LESS_THAN_VALUE_FACTOR,
+            )
         if invalid.any() or negative.any():
             report.invalid_values[col] = int(invalid.sum() + negative.sum())
             logger.warning(

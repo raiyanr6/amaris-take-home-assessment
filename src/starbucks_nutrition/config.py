@@ -115,6 +115,11 @@ HEADER_UNIT_TOKENS: Final[tuple[str, ...]] = ("g", "mg", "kcal")
 # (a 0 would drag averages down and make items look healthier than they are).
 MISSING_TOKENS: Final[frozenset[str]] = frozenset({"-", "", "n/a", "na", "--"})
 
+# Labels print trace amounts as "<1 g". Dropping them would lose real (tiny) values, and
+# 0 would be a guess, so "<x" is stored as x * this factor (the middle of 0..x: "<1" ->
+# 0.5) and counted in QualityReport.approximate_values.
+LESS_THAN_VALUE_FACTOR: Final = 0.5
+
 # --------------------------------------------------------------------------------------
 # Plausibility checks
 # --------------------------------------------------------------------------------------

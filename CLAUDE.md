@@ -44,8 +44,10 @@ tests/          pytest (no __init__.py); conftest.py has fixture CSV builders; f
   computed by `analysis`/`filters` (plus `availability()` and the QualityReport) and must
   never calculate or invent values. Unavailable metrics (sugar, caffeine, food sodium)
   must be stated as unavailable.
-- Missing values are NaN, never 0. Unreliable rows (`is_reliable == False`) are excluded
-  from stats/rankings by default (`include_unreliable=False`).
+- Missing values are NaN, never 0. `<x` (trace amounts) becomes
+  `x * LESS_THAN_VALUE_FACTOR` (0.5) and is counted in `QualityReport.approximate_values`.
+  Unreliable rows (`is_reliable == False`) are excluded from stats/rankings by default
+  (`include_unreliable=False`).
 - Any category comparison shown to users or the LLM must carry its coverage columns and
   `analysis.comparison_caveats()` — drink means cover only 48% of drinks.
 - The loader must accept paths, bytes and file-like objects (Streamlit uploads) and must

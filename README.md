@@ -66,6 +66,9 @@ One row per menu item, as CSV (UTF-8 or UTF-16, up to 5 MB per file):
   `Sugars (g)`, `Caffeine (mg)`. Header spelling and spacing are flexible (`Total Fat`,
   `Carbohydrates`, `Protein`...); unrecognised columns are ignored and listed.
 - Missing values may be blank, `-` or `N/A`. They stay missing and are never treated as 0.
+- Trace amounts written as `<1` or `< 1 g` are stored as half the limit (`0.5`) and
+  counted as approximate in the Data quality tab. Thousands separators may be a comma or
+  a space (`1,200`, `1 200`).
 
 A file that cannot be used shows an error naming the file and what was expected.
 
@@ -181,7 +184,8 @@ ruff format --check .
 ## Data notes
 
 - The raw files in `data/raw/` are never modified; all cleaning happens in code.
-- Missing values (`-`, `N/A`, blank…) become NaN, never 0.
+- Missing values (`-`, `N/A`, blank…) become NaN, never 0. `<x` values become `x / 2`
+  and are reported as approximate (`config.LESS_THAN_VALUE_FACTOR`).
 - Duplicates are resolved to one row per item per category; every dropped row is listed
   in the quality report with the rule applied and the reason.
 - Only 48% of drinks have nutrition data and the gaps are concentrated in Frappuccinos
