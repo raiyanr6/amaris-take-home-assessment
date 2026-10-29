@@ -1,12 +1,10 @@
 # Starbucks Nutrition Analysis
 
 A prototype LLM-powered nutrition analysis tool for the Starbucks menu. It loads the drinks
-and food CSVs, cleans them, computes statistics and comparisons with pandas, and (in later
-steps) uses the Groq LLM API to narrate the results and a Streamlit UI to explore them.
-
-> Current status: **data layer** (loading, cleaning, statistics, comparison, filtering),
-> **charts** (plotly), a **Streamlit web UI** with CSV upload, and **Groq LLM** features:
-> an AI summary (Part 2) and natural-language questions (bonus).
+and food CSVs (or your own uploads), cleans them, and computes statistics, comparisons and
+filters with pandas. A Streamlit web UI shows the results with plotly charts, and the Groq
+LLM API writes a plain-language summary (Part 2) and answers natural-language questions
+through read-only lookups (bonus). A CLI report gives the same numbers in a terminal.
 
 ## Setup
 
